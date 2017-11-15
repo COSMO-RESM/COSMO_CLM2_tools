@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from glob import glob
 from socket import gethostname
 import shutil
+import warnings
 
 # Date formats
 date_fmt_in = '%Y-%m-%d-%H'
@@ -525,7 +526,9 @@ def create_new_case():
     """Create a new Cosmo-CLM2 case"""
 
     if "daint" not in gethostname():
-        raise ValueError("cosmo_clm2 is only implemented for the Piz Daint machine")
+        warnings.warn("cosmo_clm2 is only implemented for the Piz Daint machine\n" \
+                      "   => Only use for testing")
+        # raise ValueError("cosmo_clm2 is only implemented for the Piz Daint machine")
 
     # Parse setup options from command line and xml file
     # ==================================================
