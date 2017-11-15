@@ -526,8 +526,8 @@ def create_new_case():
     """Create a new Cosmo-CLM2 case"""
 
     if "daint" not in gethostname():
-        warnings.warn("cosmo_clm2 is only implemented for the Piz Daint machine\n" \
-                      "   => Only use for testing")
+        warnings.warn("cosmo_clm2 is only implemented for the Piz Daint machine" \
+                      " => Only use for testing")
         # raise ValueError("cosmo_clm2 is only implemented for the Piz Daint machine")
 
     # Parse setup options from command line and xml file
@@ -609,7 +609,7 @@ def create_new_case():
     # =============
     # - ML - For now, no choice for the i/o directory structure
     if not os.path.exists(opts.path):
-        os.mkdir(opts.path)
+        os.makedirs(opts.path)
     transfer_COSMO_input(opts.cos_in, opts.path+'/COSMO_input', opts.start_date, opts.end_date)
     check_call(['rsync', '-avr', opts.cos_nml+'/', opts.path])
     check_call(['rsync', '-avr', opts.cos_exe, opts.path])
