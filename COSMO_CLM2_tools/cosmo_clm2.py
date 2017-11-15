@@ -526,9 +526,7 @@ def create_new_case():
     """Create a new Cosmo-CLM2 case"""
 
     if "daint" not in gethostname():
-        warnings.warn("cosmo_clm2 is only implemented for the Piz Daint machine" \
-                      " => Only use for testing")
-        # raise ValueError("cosmo_clm2 is only implemented for the Piz Daint machine")
+        raise ValueError("cosmo_clm2 is only implemented for the Piz Daint machine")
 
     # Parse setup options from command line and xml file
     # ==================================================
