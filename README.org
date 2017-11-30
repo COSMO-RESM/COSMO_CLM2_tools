@@ -2,7 +2,7 @@
   Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.cscs.ch/computers/piz_daint/index.html][Piz Daint]] only)
 
 * Install
-  - First install [[f90nml.readthedocs.io/en/latest][f90nml]]:
+  - First install [[http://f90nml.readthedocs.org/en/latest/][f90nml]]:
     #+BEGIN_SRC shell
       git clone https://github.com/marshallward/f90nml.git
       cd f90nml
