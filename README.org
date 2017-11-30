@@ -1,5 +1,5 @@
 * COSMO_CLM2_tools
-  Tools for automated creation and run of COSMO_CLM2 simulations
+  Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.cscs.ch/computers/piz_daint/index.html][Piz Daint]] only)
 
 * Install
   - First install [[f90nml.readthedocs.io/en/latest][f90nml]]:
