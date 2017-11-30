@@ -1,5 +1,5 @@
 * COSMO_CLM2_tools
-  Tools for automated creation and run of COSMO_CLM2 configurations
+  Tools for automated creation and run of COSMO_CLM2 simulations
 
 * Install
   - First install [[f90nml.readthedocs.io/en/latest][f90nml]]:
@@ -19,7 +19,7 @@
 
 * Usage
   More comprehensive help will follow. Essentially the tool provides
-  the cc2_create_case command. This is the result ~cc2_create_case --help~:
+  the cc2_create_case command. This is the result of ~cc2_create_case --help~:
   #+BEGIN_SRC text
     usage: cc2_create_case [-h] [-s FILE] [--name NAME] [--path PATH]
                            [--start_date DATE_1] [--end_date DATE_2]
