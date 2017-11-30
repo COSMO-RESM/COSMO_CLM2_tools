@@ -15,7 +15,7 @@
       cd COSMO_CLM2_tools
       python2 setup.py install --user
     #+END_SRC
-  - Make sure ~~/.local/bin~ is in your path
+  - Make sure =~/.local/bin= is in your path
 
 * Usage
   More comprehensive help will follow. Essentially the tool provides
