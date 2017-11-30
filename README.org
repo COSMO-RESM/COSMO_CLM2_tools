@@ -15,11 +15,11 @@
       cd COSMO_CLM2_tools
       python2 setup.py install --user
     #+END_SRC
-  - Make sure `~/.local/bin` is in your path
+  - Make sure ~~/.local/bin~ is in your path
 
 * Usage
   More comprehensive help will follow. Essentially the tool provides
-  the cc2_create_case command. This is the result `cc2_create_case --help`:
+  the cc2_create_case command. This is the result ~cc2_create_case --help~:
   #+BEGIN_SRC text
     usage: cc2_create_case [-h] [-s FILE] [--name NAME] [--path PATH]
                            [--start_date DATE_1] [--end_date DATE_2]
