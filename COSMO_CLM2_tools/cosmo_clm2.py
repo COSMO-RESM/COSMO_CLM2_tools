@@ -200,6 +200,7 @@ class case(object):
                     self._run_end_date = self._run_start_date + self._runtime
             else:
                 self._run_end_date = add_time_from_str(self._run_start_date, self.run_length)
+                self._runtime = self._run_end_date - self._run_start_date
             self._end_date = self._run_end_date
 
 
@@ -434,9 +435,9 @@ class case(object):
         for f in file_list:
             os.remove(f)
         # Run
-        start_time = time.clock()
+        start_time = time.time()
         check_call(['srun', '-u', '--multi-prog', './proc_config'])
-        elapsed = time.clock() - start_time
+        elapsed = time.time() - start_time
         print("\nCase {name:s} ran in {elapsed:.2f}\n".format(name=self.name, elapsed=elapsed))
         os.chdir(cwd)
 
@@ -541,11 +542,12 @@ def create_new_case():
                         help="simulation start date formatted as YYYY-MM-DD-HH")
     parser.add_argument('--end_date', metavar='DATE_2',
                         help="simulation end date formatted as YYYY-MM-DD-HH")
-    parser.add_argument('--run_length', metavar='N1yN2m',
-                        help="restart every N1 year + N2 month\n"\
-                        "N1 and N2 are arbitrary integers potentially including sign\n"\
-                        "'y' and 'm' are actual letters standing for 'year' and 'month'\n"\
-                        "N1y can be omitted to specify only month (>12 is possible)")
+    parser.add_argument('--run_length', metavar='dt',
+                        help="sets simulation length if end_date not specified or run length"\
+                        "between restarts otherwise"\
+                        "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'"\
+                        "N1, N2 and N3 being arbitrary integers (N2>12 posible) and"\
+                        "'y', 'm' and 'd' stand for year, month and day")
     parser.add_argument('--cos_in', help="COSMO input files directory (default: './COSMO_input')")
     parser.add_argument('--cos_nml', help="COSMO namelists directory (default: './COSMO_nml')")
     parser.add_argument('--cos_exe', help="path to COSMO executable (default: './cosmo')")
@@ -567,7 +569,7 @@ def create_new_case():
                         "(type: bool, default: False)")
     parser.add_argument('--dummy_day', type=bool,
                         help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
-                        "(default: True)")
+                        "(type: bool, default: True)")
     parser.add_argument('--no_submit', action='store_false', dest='submit',
                         help="do not submit job after setup\n"\
                         "only command line argument, cannot be set in xml file")
@@ -596,6 +598,9 @@ def create_new_case():
     else:
         xml_node = None
     apply_defaults(opts, xml_node, defaults)
+
+    if opts.path is None:
+        opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
     
     # Log
     # ===
@@ -606,10 +611,18 @@ def create_new_case():
     # Transfer data
     # =============
     # - ML - For now, no choice for the I/O directory structure
+    # - ML - Do first transfering namelists, then create case, then transfer input
     if not os.path.exists(opts.path):
         os.makedirs(opts.path)
-    dh = f90nml.read(os.path.join(opts.cos_nml, 'INPUT_IO'))['gribin']['hincbound']
-    transfer_COSMO_input(opts.cos_in, opts.path+'/COSMO_input', opts.start_date, opts.end_date, dh)
+    INPUT_IO = f90nml.read(os.path.join(opts.cos_nml, 'INPUT_IO'))
+    dh = INPUT_IO['gribin']['hincbound']
+    ext =''
+    if 'yform_read' in INPUT_IO['ioctl'].keys():
+        if INPUT_IO['ioctl']['yform_read'] == 'ncdf':
+            ext = '.nc'
+    transfer_COSMO_input(opts.cos_in, opts.path+'/COSMO_input',
+                         opts.start_date, opts.end_date,
+                         opts.run_length, dh, opts.dummy_day, ext)
     check_call(['rsync', '-avr', opts.cos_nml+'/', opts.path])
     check_call(['rsync', '-avr', opts.cos_exe, opts.path])
     check_call(['rsync', '-avr', opts.cesm_in+'/', opts.path+'/CESM_input/'])
@@ -646,7 +659,7 @@ def create_new_case():
                 block = node.get('block')
                 n = node.get('n')
                 param = node.get("param")
-                value = node.text
+                val_str = node.text
                 if name is None:
                     raise ValueError("namelist file xml attribute is required to change parameter")
                 if block is None:
@@ -655,20 +668,21 @@ def create_new_case():
                     raise ValueError("param xml attribute is required to change parameter")
                 nml = cc2case.nml[name][block]
                 if node.get('type') is None:
-                    if n is None:
-                        nml[param] = value
-                    else:
-                        nml[int(n)-1][param] = value
+                    value = val_str
+                elif node.get('type') == 'py_eval':
+                    value = eval(val_str)
                 else:
                     val_type = eval(node.get('type'))
                     if isinstance(val_type, type):
-                        if n is None:
-                            nml[param] = val_type(value)
-                        else:
-                            nml[int(n)-1][param] = val_type(value)
+                        value = val_type(val_str)
                     else:
-                        raise ValueError("xml atribute 'type' for parameter {:s}".format(param)
-                                         + " is not a valid python type")
+                        err_mess = "Given xml atribute 'type' for parameter {:s} is {:s}\n"\
+                                   "It has to be either 'py_eval' or a valid build in python type"
+                        raise ValueError(err_mess.format(param, val_type))
+                if n is None:
+                    nml[param] = value
+                else:
+                    nml[int(n)-1][param] = value
     # Change namelist parameters from certain cmd line arguments
     if opts.gen_oasis:
         cc2case.nml['drv_in']['ccsm_pes']['atm_ntasks'] = 1
@@ -696,59 +710,82 @@ def apply_defaults(opts, xml_node, defaults):
                 if xml_opt is None:
                     apply_def = True
                 else:
-                    opt_val = xml_opt.text
-                    if opt_val is None:
-                        apply_def = True
+                    opt_val_str = xml_opt.text
+                    if xml_opt.get('type') is None:
+                        setattr(opts, opt, opt_val_str)
+                    elif xml_opt.get('type') == 'py_eval':
+                        setattr(opts, opt, eval(opt_val_str))
                     else:
-                        if xml_opt.get('type') is None:
-                            setattr(opts, opt, opt_val)
+                        opt_type = eval(xml_opt.get('type'))
+                        if isinstance(opt_type, type):
+                            setattr(opts, opt, opt_type(opt_val_str))
                         else:
-                            opt_type = eval(xml_opt.get('type'))
-                            if isinstance(opt_type, type):
-                                setattr(opts, opt, opt_type(opt_val))
-                            else:
-                                raise ValueError("xml atribute 'type' for option {:s}".format(opt)
-                                                 + " is not a valid python type")
+                            raise ValueError("xml atribute 'type' for option {:s}".format(opt)
+                                             + " is not a valid python type")
         if apply_def:
             setattr(opts, opt, default)
 
 
-def transfer_COSMO_input(src_dir, target_dir, start_date, end_date, dh):
+def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
+                         run_length, dh, dummy_day, ext):
 
     d1 = datetime.strptime(start_date, date_fmt_in)
-    d2 = datetime.strptime(end_date, date_fmt_in)
+    if end_date is None:
+        if run_length is None:
+            raise ValueError("if end_date is none, provide run_length")
+        else:
+            d2 = add_time_from_str(d1, run_length)
+    else:
+        d2 = datetime.strptime(end_date, date_fmt_in)
     delta = timedelta(seconds=dh*3600.0)
     
     def check_input(root, date, file_list, dummy=False):
-        file_name = root + format(date.strftime(date_fmt_cosmo))
+        file_name = root + format(date.strftime(date_fmt_cosmo)) + ext
         if os.path.exists(os.path.join(src_dir, file_name)):
             file_list.write(file_name + '\n')
+            return True
         elif dummy:
-            dummy_date = d1
-            dummy_date.hour = date.hour
-            dummy_file_name = root + format(dummy_date.strftime(date_fmt_cosmo))
-            msg = "WARNING: Copying {:s} as {:s} for additionnal dummy day (produce last COSMO output)"
-            print(msg.format(dummy_file_name, file_name))
-            shutil.copy(os.path.join(src_dir, dummy_file_name), os.path.join(target_dir, file_name))
+            raise ValueError("Creating dummy input files: no tool available on Piz Daint\n"\
+                             "to alter the date of the input file, wether grib or netcdf.\n"\
+                             "Please proceed manually.")
+            # dummy_date = datetime(d1.year, d1.month, d1.day, date.hour)
+            # dummy_file_name = root + format(dummy_date.strftime(date_fmt_cosmo)) + ext
+            # msg = "WARNING: Copying {:s} as {:s} for additionnal dummy day (produce last COSMO output)"
+            # print(msg.format(dummy_file_name, file_name))
+            # in_file = os.path.join(src_dir, dummy_file_name)
+            # out_file = os.path.join(target_dir, file_name)
+            # if ext == '':
+            #     check_call(['grib_set', '-s', 'dataDate={:s}'.format(dummy_date.strftime('%Y%m%d')),
+            #                 in_file, out_file])
+            # else:
+            #     raise ValueError("Creating dummy input files: no tool available on Piz Daint\n"\
+            #                      "to alter the date of netcdf file, please proceed manually.")
+            #     # shutil.copy(in_file, out_file)
+            # return False
         else:
             raise ValueError("input file {:s} is missing".format(file_name))
-
     
+    # Check all input files for current period
     with open('transfer_list', mode ='w') as t_list:
-        # Check all input files for current period
         check_input('laf', d1, t_list)
         cur_date = d1
         while cur_date <= d2:
             check_input('lbfd', cur_date, t_list)
             cur_date += delta
-        # Add a dummy day to produce last COSMO output
-        while cur_date <= d2 + timedelta(days=1):
-            check_input('lbfd', cur_date, t_list, dummy=True)
-            cur_date += delta
-
-    # Transfer
     check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                 os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
+    
+    # Add a dummy day to produce last COSMO output
+    if dummy_day:
+        do_transfer = False
+        with open('transfer_list', mode ='w') as t_list:
+            while cur_date <= d2 + timedelta(days=1):
+                do_transfer = do_transfer or check_input('lbfd', cur_date, t_list, dummy=True)
+                cur_date += delta
+        if do_transfer:
+            check_call(['rsync', '-avr', '--files-from', 'transfer_list',
+                        os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
+            
     os.remove('transfer_list')
                         
 
