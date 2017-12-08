@@ -39,7 +39,11 @@
       --path PATH           directory where the case is set up (default: $SCRATCH/NAME)
       --start_date DATE_1   simulation start date formatted as YYYY-MM-DD-HH
       --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
-      --run_length dt       sets simulation length if end_date not specified or run lengthbetween restarts otherwisedt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'N1, N2 and N3 being arbitrary integers (N2>12 posible) and'y', 'm' and 'd' stand for year, month and day
+      --run_length dt       sets simulation length if end_date not specified or run length
+                            between restarts otherwise
+                            dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'
+                            N1, N2 and N3 being arbitrary integers (N2>12 posible) and
+                            'y', 'm' and 'd' stand for year, month and day
       --cos_in COS_IN       COSMO input files directory (default: './COSMO_input')
       --cos_nml COS_NML     COSMO namelists directory (default: './COSMO_nml')
       --cos_exe COS_EXE     path to COSMO executable (default: './cosmo')

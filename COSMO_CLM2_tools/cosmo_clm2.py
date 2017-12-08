@@ -541,10 +541,10 @@ def create_new_case():
     parser.add_argument('--end_date', metavar='DATE_2',
                         help="simulation end date formatted as YYYY-MM-DD-HH")
     parser.add_argument('--run_length', metavar='dt',
-                        help="sets simulation length if end_date not specified or run length"\
-                        "between restarts otherwise"\
-                        "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'"\
-                        "N1, N2 and N3 being arbitrary integers (N2>12 posible) and"\
+                        help="sets simulation length if end_date not specified or run length\n"\
+                        "between restarts otherwise\n"\
+                        "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'\n"\
+                        "N1, N2 and N3 being arbitrary integers (N2>12 posible) and\n"\
                         "'y', 'm' and 'd' stand for year, month and day")
     parser.add_argument('--cos_in', help="COSMO input files directory (default: './COSMO_input')")
     parser.add_argument('--cos_nml', help="COSMO namelists directory (default: './COSMO_nml')")
