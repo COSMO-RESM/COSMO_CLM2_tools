@@ -385,24 +385,22 @@ class case(object):
             
 
     def set_next_run(self):
-        if self._run_start_date >= self._end_date:
+        if ((self._run_start_date >= self._end_date) or
+            (self._run_end_date == self._end_date and not self.dummy_day)):
             return False
         else:
             hstart = (self._run_end_date - self._start_date).total_seconds() // 3600.0
             self.nml['INPUT_ORG']['runctl']['hstart'] = hstart
             self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt_cesm))
+            self._compute_run_dates()
             # - ML - Setting ydirini might not be needed, try without at some point
             self.nml['INPUT_IO']['gribin']['ydirini'] = self.nml['INPUT_IO']['ioctl']['ydir_restart_out']
             for gribout in self._get_gribouts():
                 gribout['lwrite_const'] = False
             self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'continue'
             self.write_open_nml()
-            self._compute_run_dates()   # - ML - compute next run dates before updating controller
             self._update_controller()
-            if self._run_start_date == self._end_date and not self.dummy_day:
-                return False
-            else:
-                return True
+            return True
 
 
     def _update_controller(self):
