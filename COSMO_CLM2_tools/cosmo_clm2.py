@@ -36,7 +36,7 @@ class case(object):
                  start_date=None, end_date=None, run_length=None,
                  COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
                  wall_time='24:00:00', account=None,
-                 ncosx=None, ncosy=None, ncesm=None,
+                 ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, module_purge=False,
                  dummy_day=True):
         # Basic init (no particular work required)
@@ -59,6 +59,7 @@ class case(object):
         self._check_gribout()
         self.ncosx = ncosx
         self.ncosy = ncosy
+        self.ncosio = ncosio
         self.ncesm = ncesm
         self.write_open_nml()   # Nothing requires changing namelists after that
         # Create batch scripts
@@ -133,6 +134,15 @@ class case(object):
         self._ncosy = n
         if n is not None:
             self.nml['INPUT_ORG']['runctl']['nprocy'] = n
+
+    @property
+    def ncosio(self):
+        return self._ncosio
+    @ncosio.setter
+    def ncosio(self, n):
+        self._ncosio = n
+        if n is not None:
+            self.nml['INPUT_ORG']['runctl']['nprocio'] = n
 
     @property
     def ncesm(self):
@@ -297,7 +307,8 @@ class case(object):
 
 
     def _build_proc_config(self):
-        n_cos = self.nml['INPUT_ORG']['runctl']['nprocx'] * self.nml['INPUT_ORG']['runctl']['nprocy']
+        n_cos = self.nml['INPUT_ORG']['runctl']['nprocx'] * self.nml['INPUT_ORG']['runctl']['nprocy'] \
+                + self.nml['INPUT_ORG']['runctl']['nprocio']
         n_cesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
         n_tot = n_cos + n_cesm
         # - ML - Add warning if not a round number of nodes
@@ -558,6 +569,8 @@ def create_new_case():
                         "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
     parser.add_argument('--ncosy', type=int, help="number of subdomains along the 'y-axis'\n"\
                         "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
+    parser.add_argument('--ncosio', type=int, help="number of cores dedicated to i/o work'\n"\
+                        "(type: int, default: from INPUT_ORG namelist)")
     parser.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
                         "(type: int, default: from drv_in namelist)")
     parser.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
@@ -587,7 +600,7 @@ def create_new_case():
                 'run_length': None, 'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml',
                 'cos_exe': './cosmo', 'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml',
                 'cesm_exe': './cesm.exe', 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
-                'ncosx': None, 'ncosy': None, 'ncesm': None,
+                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
                 'wall_time': '24:00:00', 'account': None, 'dummy_day': True,
                 'gpu_mode': False, 'module_purge': False}
     if opts.setup_file is not None:
@@ -641,7 +654,7 @@ def create_new_case():
                    COSMO_exe=os.path.basename(opts.cos_exe),
                    CESM_exe=os.path.basename(opts.cesm_exe),
                    wall_time=opts.wall_time, account=opts.account,
-                   ncosx=opts.ncosx, ncosy=opts.ncosy, ncesm=opts.ncesm,
+                   ncosx=opts.ncosx, ncosy=opts.ncosy, ncosio=opts.ncosio, ncesm=opts.ncesm,
                    gpu_mode=opts.gpu_mode,
                    module_purge=opts.module_purge,
                    dummy_day=opts.dummy_day)
