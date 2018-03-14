@@ -14,5 +14,5 @@ setup(name='COSMO_CLM2_tools',
       packages=['COSMO_CLM2_tools'],
       entry_points={'console_scripts': ['cc2_create_case = COSMO_CLM2_tools.cosmo_clm2:create_new_case',
                                         'cc2_control_case = COSMO_CLM2_tools.cosmo_clm2:control_case'],},
-      install_requires=['f90nml>=0.22']
+      install_requires=['f90nml>=1.0.2']
 )

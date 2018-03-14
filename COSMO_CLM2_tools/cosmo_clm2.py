@@ -27,7 +27,7 @@ class case(object):
     # Class wide variables
     # ====================
     # Number of tasks per node
-    n_tasks_per_node = 12
+    _n_tasks_per_node = 12
 
     # ====
     # Init
@@ -37,7 +37,7 @@ class case(object):
                  COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
                  wall_time='24:00:00', account=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
-                 gpu_mode=False, module_purge=False,
+                 gpu_mode=False, modules_opt='none',
                  dummy_day=True):
         # Basic init (no particular work required)
         self.run_length = run_length
@@ -46,7 +46,7 @@ class case(object):
         self.wall_time = wall_time
         self.account = account
         self.gpu_mode = gpu_mode
-        self.module_purge = module_purge
+        self.modules_opt = modules_opt
         self.dummy_day = dummy_day
         # Settings involving namelist changes
         self.path = path
@@ -60,7 +60,7 @@ class case(object):
         self.ncosx = ncosx
         self.ncosy = ncosy
         self.ncosio = ncosio
-        self.ncesm = ncesm
+        self.ncesm = ncesm   # Keep that order betwen ncos* and ncesm as ncesm is adapted in gpu mode
         self.write_open_nml()   # Nothing requires changing namelists after that
         # Create batch scripts
         self._build_proc_config()
@@ -122,8 +122,10 @@ class case(object):
         return self._ncosx
     @ncosx.setter
     def ncosx(self, n):
-        self._ncosx = n
-        if n is not None:
+        if n is None:
+            self._ncosx = self.nml['INPUT_ORG']['runctl']['nprocx']
+        else:
+            self._ncosx = n
             self.nml['INPUT_ORG']['runctl']['nprocx'] = n
 
     @property
@@ -131,8 +133,10 @@ class case(object):
         return self._ncosy
     @ncosy.setter
     def ncosy(self, n):
-        self._ncosy = n
-        if n is not None:
+        if n is None:
+            self._ncosy = self.nml['INPUT_ORG']['runctl']['nprocy']
+        else:
+            self._ncosy = n
             self.nml['INPUT_ORG']['runctl']['nprocy'] = n
 
     @property
@@ -140,8 +144,10 @@ class case(object):
         return self._ncosio
     @ncosio.setter
     def ncosio(self, n):
-        self._ncosio = n
-        if n is not None:
+        if n is None:
+            self._ncosio = self.nml['INPUT_ORG']['runctl']['nprocio']
+        else:
+            self._ncosio = n
             self.nml['INPUT_ORG']['runctl']['nprocio'] = n
 
     @property
@@ -149,10 +155,24 @@ class case(object):
         return self._ncesm
     @ncesm.setter
     def ncesm(self, n):
-        self._ncesm = n
-        if n is not None:
-            for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
-                self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = n
+        # total number of COSMO tasks
+        self._ncos = self._ncosx * self._ncosy + self._ncosio
+        if self.gpu_mode:   # Populate nodes with CESM tasks except one
+            self._n_nodes = self._ncos
+            self._ncesm = self._n_nodes * (self._n_tasks_per_node - 1)
+        else:   # Determine number of CESM tasks and deduce number of nodes
+            if n is None:
+                self._ncesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
+            else:
+                self._ncesm = n
+            ntot = self._ncos + self._ncesm
+            if ntot % self._n_tasks_per_node != 0:
+                msg = "total number of tasks (ncosx x ncosy + ncosio + ncesm = {:d}) has to be divisible by {:d}"
+                raise ValueError(msg.format(ntot, self._n_tasks_per_node))
+            self._n_nodes = ntot // self._n_tasks_per_node
+        # Apply number of CESM tasks to all relevant namelist parameters
+        for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
+            self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
 
     @property
     def account(self):
@@ -302,20 +322,21 @@ class case(object):
     def _mk_miss_path(self, rel_path):
         path = os.path.join(self.path, rel_path)
         if not os.path.exists(path):
-            print('Creating path' + path)
+            print('Creating path ' + path)
             os.makedirs(path)
 
 
     def _build_proc_config(self):
-        n_cos = self.nml['INPUT_ORG']['runctl']['nprocx'] * self.nml['INPUT_ORG']['runctl']['nprocy'] \
-                + self.nml['INPUT_ORG']['runctl']['nprocio']
-        n_cesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
-        n_tot = n_cos + n_cesm
-        # - ML - Add warning if not a round number of nodes
-        self._n_nodes = n_tot // self.n_tasks_per_node
         with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
-            f.write('{:d}-{:d} ./{:s}\n'.format(0, n_cos-1, self.COSMO_exe))
-            f.write('{:d}-{:d} ./{:s}\n'.format(n_cos, n_tot-1, self.CESM_exe))
+            if self.gpu_mode:
+                N = self._n_tasks_per_node
+                line = ",".join([str(k*N) for k in range(self._n_nodes)])
+                f.write("{:s} ./{:s}\n".format(line, self.COSMO_exe))
+                line = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
+                f.write("{:s} ./{:s}\n".format(line, self.CESM_exe))
+            else:
+                f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
+                f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
 
 
     def _build_controller(self):
@@ -332,11 +353,11 @@ class case(object):
             script.write('#SBATCH --account={:s}\n'.format(self.account))
             script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
             script.write('\n')
-            if self.module_purge:
+            if self.modules_opt == 'purge':
                 script.write('module purge\n')
                 script.write('module load PrgEnv-pgi\n')
                 script.write('module load cray-netcdf\n')
-            else:
+            elif self.modules_opt == 'switch':
                 script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
                 script.write('module load cray-netcdf\n')
             script.write('module list\n')
@@ -389,7 +410,7 @@ class case(object):
         ET.SubElement(config, 'wall_time').text = self.wall_time
         ET.SubElement(config, 'account').text = self.account
         ET.SubElement(config, 'gpu_mode', attrib={'type': 'bool'}).text = '1' if self.gpu_mode else ''
-        ET.SubElement(config, 'module_purge', attrib={'type': 'bool'}).text = '1'if self.module_purge else ''
+        ET.SubElement(config, 'modules_opt').text = self.modules_opt
         ET.SubElement(config, 'dummy_day', attrib={'type': 'bool'}).text = '1' if self.dummy_day else ''
         indent(config)
         tree.write(os.path.join(self.path, file_name), xml_declaration=True)
@@ -576,8 +597,8 @@ def create_new_case():
     parser.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
     parser.add_argument('--account', help="account to use for batch script (default: infered from $ROJECT)")
     parser.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
-    parser.add_argument('--module_purge', type=bool, help="purge modules before loading and running "\
-                        "(type: bool, default: False)")
+    parser.add_argument('--modules_opt', choices=['none', 'switch', 'purge'],
+                        help="Option for loading modules at run time (default: 'none')")
     parser.add_argument('--dummy_day', type=bool,
                         help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                         "(type: bool, default: True)")
@@ -602,7 +623,7 @@ def create_new_case():
                 'cesm_exe': './cesm.exe', 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
                 'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
                 'wall_time': '24:00:00', 'account': None, 'dummy_day': True,
-                'gpu_mode': False, 'module_purge': False}
+                'gpu_mode': False, 'modules_opt': 'none'}
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
         xml_node = tree.getroot().find('cmd_line')
@@ -656,7 +677,7 @@ def create_new_case():
                    wall_time=opts.wall_time, account=opts.account,
                    ncosx=opts.ncosx, ncosy=opts.ncosy, ncosio=opts.ncosio, ncesm=opts.ncesm,
                    gpu_mode=opts.gpu_mode,
-                   module_purge=opts.module_purge,
+                   modules_opt=opts.modules_opt,
                    dummy_day=opts.dummy_day)
 
     # Change parameters from xml file if required
