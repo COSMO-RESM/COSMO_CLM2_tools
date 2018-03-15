@@ -1,4 +1,4 @@
-# Created 2018-03-15 Thu 17:12
+# Created 2018-03-15 Thu 17:26
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
 #+EXPORT_FILE_NAME: README
@@ -16,7 +16,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 - Make sure =~/.local/bin= is in your path
 
 * Usage
-More comprehensive help will follow. Essentially the tool provides
+More comprehensive help will come. Essentially the tool provides
 the cc2_create_case command. This is the result of =cc2_create_case
   --help=:
 #+BEGIN_SRC text
@@ -26,10 +26,11 @@ the cc2_create_case command. This is the result of =cc2_create_case
                          [--cos_exe COS_EXE] [--cesm_in CESM_IN]
                          [--cesm_nml CESM_NML] [--cesm_exe CESM_EXE]
                          [--oas_in OAS_IN] [--oas_nml OAS_NML] [--ncosx NCOSX]
-                         [--ncosy NCOSY] [--ncesm NCESM] [--wall_time WALL_TIME]
-                         [--account ACCOUNT] [--gpu_mode GPU_MODE]
-                         [--module_purge MODULE_PURGE] [--dummy_day DUMMY_DAY]
-                         [--no_submit] [--gen_oasis]
+                         [--ncosy NCOSY] [--ncosio NCOSIO] [--ncesm NCESM]
+                         [--wall_time WALL_TIME] [--account ACCOUNT]
+                         [--gpu_mode GPU_MODE]
+                         [--modules_opt {none,switch,purge}]
+                         [--dummy_day DUMMY_DAY] [--no_submit] [--gen_oasis]
   
   Set up and run a COSMO_CLM2 case
   --------------------------------
@@ -62,14 +63,16 @@ the cc2_create_case command. This is the result of =cc2_create_case
                           for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
     --ncosy NCOSY         number of subdomains along the 'y-axis'
                           for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
+    --ncosio NCOSIO       number of cores dedicated to i/o work'
+                          (type: int, default: from INPUT_ORG namelist)
     --ncesm NCESM         number of subdomains for CESM domain decomposition'
                           (type: int, default: from drv_in namelist)
     --wall_time WALL_TIME
                           reserved time on compute nodes (default: '24:00:00')
     --account ACCOUNT     account to use for batch script (default: infered from $ROJECT)
     --gpu_mode GPU_MODE   run COSMO on gpu (type: bool, default: False)
-    --module_purge MODULE_PURGE
-                          purge modules before loading and running (type: bool, default: False)
+    --modules_opt {none,switch,purge}
+                          Option for loading modules at run time (default: 'none')
     --dummy_day DUMMY_DAY
                           perform a dummy day run after end of simulation to get last COSMO output.
                           (type: bool, default: True)
