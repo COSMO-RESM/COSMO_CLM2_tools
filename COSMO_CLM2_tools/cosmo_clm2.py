@@ -16,11 +16,6 @@ date_fmt_in = '%Y-%m-%d-%H'
 date_fmt_cosmo = '%Y%m%d%H'
 date_fmt_cesm = '%Y%m%d'
 
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                           The COSMO-CLM2 case class
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 class case(object):
     """Class defining a COSMO-CLM2 case"""
 
@@ -260,8 +255,8 @@ class case(object):
 
     def write_open_nml(self):
         self.nml.write_all()
-        
-    
+
+
     def _create_missing_dirs(self):
         # COSMO
         # -----
@@ -288,7 +283,7 @@ class case(object):
             self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diri'])
             self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diro'])
 
-                    
+
     def _mk_miss_path(self, rel_path):
         path = os.path.join(self.path, rel_path)
         if not os.path.exists(path):
@@ -365,7 +360,7 @@ class case(object):
             else:
                 if level and (not elem.tail or not elem.tail.strip()):
                     elem.tail = i
-                    
+
         config = ET.Element('config')
         tree = ET.ElementTree(config)
         ET.SubElement(config, 'name').text = self.name
@@ -382,7 +377,7 @@ class case(object):
         ET.SubElement(config, 'dummy_day', attrib={'type': 'bool'}).text = '1' if self.dummy_day else ''
         indent(config)
         tree.write(os.path.join(self.path, file_name), xml_declaration=True)
-            
+
 
     def set_next_run(self):
         if ((self._run_start_date >= self._end_date) or
@@ -424,7 +419,7 @@ class case(object):
         check_call(['sbatch', 'controller', './config.xml'])
         os.chdir(cwd)
 
-        
+
     def run(self):
         cwd = os.getcwd()
         # Clean workdir
@@ -439,16 +434,13 @@ class case(object):
         print("\nCase {name:s} ran in {elapsed:.2f}\n".format(name=self.name, elapsed=elapsed))
         os.chdir(cwd)
 
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                           The namelist dictionnary
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 class nmldict(dict):
+    """Dictionnary of all the namelists of a case. Only load tha namelist if needed"""
 
     def __init__(self, cc2case):
         dict.__init__(self)
         self.cc2case = cc2case
-    
+
     def __getitem__(self, key):
         if key not in self:
             self[key] = f90nml.read(os.path.join(self.cc2case.path, key))
@@ -456,15 +448,10 @@ class nmldict(dict):
 
     def write(self, name):
         self[name].write(os.path.join(self.cc2case.path, name), force=True)
-    
+
     def write_all(self):
         for name, nml in self.items():
             self.write(name)
-
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                           Module functions
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 def add_time_from_str(date1, dt_str):
     """Increment date from a string
@@ -473,14 +460,14 @@ def add_time_from_str(date1, dt_str):
     where dt_str is a string of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d',
     N1, N2 and N3 being arbitrary integers potentially including sign and
     'y', 'm' and 'd' the actual letters standing for year, month and day respectivly."""
-        
+
     ky, km, kd, ny, nm, nd = 0, 0, 0, 0, 0, 0
     for k, c in enumerate(dt_str):
         if c == 'y':
             ky, ny = k, int(dt_str[0:k])
         if c == 'm':
             km, nm = k, int(dt_str[ky:k])
-            
+
     if km == 0 and ky == 0:
         for k, c in enumerate(dt_str):
             if c == 'd':
@@ -495,10 +482,9 @@ def add_time_from_str(date1, dt_str):
         m2 = (nm+m2-1) % 12 + 1
         return datetime(y2, m2, d2, h2)
 
-        
 def case_from_xml(xml_file):
     """Build a COSMO_CLM2 case from xml file"""
-    
+
     config = ET.parse(os.path.normpath(xml_file)).getroot()
     args={}
     for opt in config.iter():
@@ -512,9 +498,8 @@ def case_from_xml(xml_file):
                 else:
                     raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
                                      + " is not a valid python type")
-    
+
     return case(**args)
-        
 
 def create_new_case():
     """Create a new Cosmo-CLM2 case"""
@@ -524,7 +509,7 @@ def create_new_case():
 
     # Parse setup options from command line and xml file
     # ==================================================
-    
+
     # Options from command line
     # -------------------------
     dsc = "Set up and run a COSMO_CLM2 case\n"\
@@ -580,7 +565,7 @@ def create_new_case():
     opts = parser.parse_args()
     if opts.gen_oasis:
         opts.dummy_day = False
-    
+
     # Set options to xml value if needed or default if nothing provided
     # -----------------------------------------------------------------
     defaults = {'name': 'COSMO_CLM2', 'path': None, 'start_date': None, 'end_date': None,
@@ -599,13 +584,13 @@ def create_new_case():
 
     if opts.path is None:
         opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
-    
+
     # Log
     # ===
     log = 'Setting up case {:s} in {:s}'.format(opts.name, opts.path)
     under = '-' * len(log)
     print(log + '\n' + under)
-        
+
     # Transfer data
     # =============
     # - ML - For now, no choice for the I/O directory structure
@@ -632,7 +617,7 @@ def create_new_case():
         for f in os.listdir(opts.oas_in):
             os.remove(os.path.join(opts.path, f))
     check_call(['rsync', '-avr', opts.oas_nml+'/', opts.path])
-        
+
     # Create case instance
     # ====================
     cc2case = case(name=opts.name, path=opts.path,
@@ -695,7 +680,6 @@ def create_new_case():
     if opts.submit:
         cc2case.submit()
 
-        
 def apply_defaults(opts, xml_node, defaults):
     """Set options with opts > xml_file > defaults"""
     for opt, default  in defaults.items():
@@ -723,7 +707,6 @@ def apply_defaults(opts, xml_node, defaults):
         if apply_def:
             setattr(opts, opt, default)
 
-
 def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
                          run_length, dh, dummy_day, ext):
 
@@ -736,7 +719,7 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
     else:
         d2 = datetime.strptime(end_date, date_fmt_in)
     delta = timedelta(seconds=dh*3600.0)
-    
+
     def check_input(root, date, file_list, dummy=False):
         file_name = root + format(date.strftime(date_fmt_cosmo)) + ext
         if os.path.exists(os.path.join(src_dir, file_name)):
@@ -762,7 +745,7 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
             # return False
         else:
             raise ValueError("input file {:s} is missing".format(file_name))
-    
+
     # Check all input files for current period
     with open('transfer_list', mode ='w') as t_list:
         check_input('laf', d1, t_list)
@@ -772,7 +755,7 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
             cur_date += delta
     check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                 os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
-    
+
     # Add a dummy day to produce last COSMO output
     if dummy_day:
         do_transfer = False
@@ -783,9 +766,8 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
         if do_transfer:
             check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                         os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
-            
+
     os.remove('transfer_list')
-                        
 
 def control_case():
     # Parse arguments
