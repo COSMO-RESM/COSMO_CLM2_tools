@@ -962,3 +962,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           install_requires=['f90nml>=1.0.2']
     )
   #+END_SRC
+
+* Notes                                                            :noexport:
+** TODO Unable COSMO only                                               :dev:
