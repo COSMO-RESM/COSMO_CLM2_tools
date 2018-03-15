@@ -16,18 +16,13 @@ date_fmt_in = '%Y-%m-%d-%H'
 date_fmt_cosmo = '%Y%m%d%H'
 date_fmt_cesm = '%Y%m%d'
 
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                           The COSMO-CLM2 case class
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 class case(object):
     """Class defining a COSMO-CLM2 case"""
 
     # Class wide variables
     # ====================
     # Number of tasks per node
-    _n_tasks_per_node = 12
+    n_tasks_per_node = 12
 
     # ====
     # Init
@@ -36,8 +31,8 @@ class case(object):
                  start_date=None, end_date=None, run_length=None,
                  COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
                  wall_time='24:00:00', account=None,
-                 ncosx=None, ncosy=None, ncosio=None, ncesm=None,
-                 gpu_mode=False, modules_opt='none',
+                 ncosx=None, ncosy=None, ncesm=None,
+                 gpu_mode=False, module_purge=False,
                  dummy_day=True):
         # Basic init (no particular work required)
         self.run_length = run_length
@@ -46,7 +41,7 @@ class case(object):
         self.wall_time = wall_time
         self.account = account
         self.gpu_mode = gpu_mode
-        self.modules_opt = modules_opt
+        self.module_purge = module_purge
         self.dummy_day = dummy_day
         # Settings involving namelist changes
         self.path = path
@@ -59,8 +54,7 @@ class case(object):
         self._check_gribout()
         self.ncosx = ncosx
         self.ncosy = ncosy
-        self.ncosio = ncosio
-        self.ncesm = ncesm   # Keep that order betwen ncos* and ncesm as ncesm is adapted in gpu mode
+        self.ncesm = ncesm
         self.write_open_nml()   # Nothing requires changing namelists after that
         # Create batch scripts
         self._build_proc_config()
@@ -122,10 +116,8 @@ class case(object):
         return self._ncosx
     @ncosx.setter
     def ncosx(self, n):
-        if n is None:
-            self._ncosx = self.nml['INPUT_ORG']['runctl']['nprocx']
-        else:
-            self._ncosx = n
+        self._ncosx = n
+        if n is not None:
             self.nml['INPUT_ORG']['runctl']['nprocx'] = n
 
     @property
@@ -133,46 +125,19 @@ class case(object):
         return self._ncosy
     @ncosy.setter
     def ncosy(self, n):
-        if n is None:
-            self._ncosy = self.nml['INPUT_ORG']['runctl']['nprocy']
-        else:
-            self._ncosy = n
+        self._ncosy = n
+        if n is not None:
             self.nml['INPUT_ORG']['runctl']['nprocy'] = n
-
-    @property
-    def ncosio(self):
-        return self._ncosio
-    @ncosio.setter
-    def ncosio(self, n):
-        if n is None:
-            self._ncosio = self.nml['INPUT_ORG']['runctl']['nprocio']
-        else:
-            self._ncosio = n
-            self.nml['INPUT_ORG']['runctl']['nprocio'] = n
 
     @property
     def ncesm(self):
         return self._ncesm
     @ncesm.setter
     def ncesm(self, n):
-        # total number of COSMO tasks
-        self._ncos = self._ncosx * self._ncosy + self._ncosio
-        if self.gpu_mode:   # Populate nodes with CESM tasks except one
-            self._n_nodes = self._ncos
-            self._ncesm = self._n_nodes * (self._n_tasks_per_node - 1)
-        else:   # Determine number of CESM tasks and deduce number of nodes
-            if n is None:
-                self._ncesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
-            else:
-                self._ncesm = n
-            ntot = self._ncos + self._ncesm
-            if ntot % self._n_tasks_per_node != 0:
-                msg = "total number of tasks (ncosx x ncosy + ncosio + ncesm = {:d}) has to be divisible by {:d}"
-                raise ValueError(msg.format(ntot, self._n_tasks_per_node))
-            self._n_nodes = ntot // self._n_tasks_per_node
-        # Apply number of CESM tasks to all relevant namelist parameters
-        for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
-            self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
+        self._ncesm = n
+        if n is not None:
+            for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
+                self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = n
 
     @property
     def account(self):
@@ -290,8 +255,8 @@ class case(object):
 
     def write_open_nml(self):
         self.nml.write_all()
-        
-    
+
+
     def _create_missing_dirs(self):
         # COSMO
         # -----
@@ -318,25 +283,23 @@ class case(object):
             self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diri'])
             self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diro'])
 
-                    
+
     def _mk_miss_path(self, rel_path):
         path = os.path.join(self.path, rel_path)
         if not os.path.exists(path):
-            print('Creating path ' + path)
+            print('Creating path' + path)
             os.makedirs(path)
 
 
     def _build_proc_config(self):
+        n_cos = self.nml['INPUT_ORG']['runctl']['nprocx'] * self.nml['INPUT_ORG']['runctl']['nprocy']
+        n_cesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
+        n_tot = n_cos + n_cesm
+        # - ML - Add warning if not a round number of nodes
+        self._n_nodes = n_tot // self.n_tasks_per_node
         with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
-            if self.gpu_mode:
-                N = self._n_tasks_per_node
-                line = ",".join([str(k*N) for k in range(self._n_nodes)])
-                f.write("{:s} ./{:s}\n".format(line, self.COSMO_exe))
-                line = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
-                f.write("{:s} ./{:s}\n".format(line, self.CESM_exe))
-            else:
-                f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
-                f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
+            f.write('{:d}-{:d} ./{:s}\n'.format(0, n_cos-1, self.COSMO_exe))
+            f.write('{:d}-{:d} ./{:s}\n'.format(n_cos, n_tot-1, self.CESM_exe))
 
 
     def _build_controller(self):
@@ -353,11 +316,11 @@ class case(object):
             script.write('#SBATCH --account={:s}\n'.format(self.account))
             script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
             script.write('\n')
-            if self.modules_opt == 'purge':
+            if self.module_purge:
                 script.write('module purge\n')
                 script.write('module load PrgEnv-pgi\n')
                 script.write('module load cray-netcdf\n')
-            elif self.modules_opt == 'switch':
+            else:
                 script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
                 script.write('module load cray-netcdf\n')
             script.write('module list\n')
@@ -397,7 +360,7 @@ class case(object):
             else:
                 if level and (not elem.tail or not elem.tail.strip()):
                     elem.tail = i
-                    
+
         config = ET.Element('config')
         tree = ET.ElementTree(config)
         ET.SubElement(config, 'name').text = self.name
@@ -410,11 +373,11 @@ class case(object):
         ET.SubElement(config, 'wall_time').text = self.wall_time
         ET.SubElement(config, 'account').text = self.account
         ET.SubElement(config, 'gpu_mode', attrib={'type': 'bool'}).text = '1' if self.gpu_mode else ''
-        ET.SubElement(config, 'modules_opt').text = self.modules_opt
+        ET.SubElement(config, 'module_purge', attrib={'type': 'bool'}).text = '1'if self.module_purge else ''
         ET.SubElement(config, 'dummy_day', attrib={'type': 'bool'}).text = '1' if self.dummy_day else ''
         indent(config)
         tree.write(os.path.join(self.path, file_name), xml_declaration=True)
-            
+
 
     def set_next_run(self):
         if ((self._run_start_date >= self._end_date) or
@@ -456,7 +419,7 @@ class case(object):
         check_call(['sbatch', 'controller', './config.xml'])
         os.chdir(cwd)
 
-        
+
     def run(self):
         cwd = os.getcwd()
         # Clean workdir
@@ -471,16 +434,13 @@ class case(object):
         print("\nCase {name:s} ran in {elapsed:.2f}\n".format(name=self.name, elapsed=elapsed))
         os.chdir(cwd)
 
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                           The namelist dictionnary
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 class nmldict(dict):
+    """Dictionnary of all the namelists of a case. Only load tha namelist if needed"""
 
     def __init__(self, cc2case):
         dict.__init__(self)
         self.cc2case = cc2case
-    
+
     def __getitem__(self, key):
         if key not in self:
             self[key] = f90nml.read(os.path.join(self.cc2case.path, key))
@@ -488,15 +448,10 @@ class nmldict(dict):
 
     def write(self, name):
         self[name].write(os.path.join(self.cc2case.path, name), force=True)
-    
+
     def write_all(self):
         for name, nml in self.items():
             self.write(name)
-
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#                           Module functions
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 def add_time_from_str(date1, dt_str):
     """Increment date from a string
@@ -505,14 +460,14 @@ def add_time_from_str(date1, dt_str):
     where dt_str is a string of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d',
     N1, N2 and N3 being arbitrary integers potentially including sign and
     'y', 'm' and 'd' the actual letters standing for year, month and day respectivly."""
-        
+
     ky, km, kd, ny, nm, nd = 0, 0, 0, 0, 0, 0
     for k, c in enumerate(dt_str):
         if c == 'y':
             ky, ny = k, int(dt_str[0:k])
         if c == 'm':
             km, nm = k, int(dt_str[ky:k])
-            
+
     if km == 0 and ky == 0:
         for k, c in enumerate(dt_str):
             if c == 'd':
@@ -527,10 +482,9 @@ def add_time_from_str(date1, dt_str):
         m2 = (nm+m2-1) % 12 + 1
         return datetime(y2, m2, d2, h2)
 
-        
 def case_from_xml(xml_file):
     """Build a COSMO_CLM2 case from xml file"""
-    
+
     config = ET.parse(os.path.normpath(xml_file)).getroot()
     args={}
     for opt in config.iter():
@@ -544,9 +498,8 @@ def case_from_xml(xml_file):
                 else:
                     raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
                                      + " is not a valid python type")
-    
+
     return case(**args)
-        
 
 def create_new_case():
     """Create a new Cosmo-CLM2 case"""
@@ -556,7 +509,7 @@ def create_new_case():
 
     # Parse setup options from command line and xml file
     # ==================================================
-    
+
     # Options from command line
     # -------------------------
     dsc = "Set up and run a COSMO_CLM2 case\n"\
@@ -590,15 +543,13 @@ def create_new_case():
                         "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
     parser.add_argument('--ncosy', type=int, help="number of subdomains along the 'y-axis'\n"\
                         "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
-    parser.add_argument('--ncosio', type=int, help="number of cores dedicated to i/o work'\n"\
-                        "(type: int, default: from INPUT_ORG namelist)")
     parser.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
                         "(type: int, default: from drv_in namelist)")
     parser.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
     parser.add_argument('--account', help="account to use for batch script (default: infered from $ROJECT)")
     parser.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
-    parser.add_argument('--modules_opt', choices=['none', 'switch', 'purge'],
-                        help="Option for loading modules at run time (default: 'none')")
+    parser.add_argument('--module_purge', type=bool, help="purge modules before loading and running "\
+                        "(type: bool, default: False)")
     parser.add_argument('--dummy_day', type=bool,
                         help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                         "(type: bool, default: True)")
@@ -614,16 +565,16 @@ def create_new_case():
     opts = parser.parse_args()
     if opts.gen_oasis:
         opts.dummy_day = False
-    
+
     # Set options to xml value if needed or default if nothing provided
     # -----------------------------------------------------------------
     defaults = {'name': 'COSMO_CLM2', 'path': None, 'start_date': None, 'end_date': None,
                 'run_length': None, 'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml',
                 'cos_exe': './cosmo', 'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml',
                 'cesm_exe': './cesm.exe', 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
-                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
+                'ncosx': None, 'ncosy': None, 'ncesm': None,
                 'wall_time': '24:00:00', 'account': None, 'dummy_day': True,
-                'gpu_mode': False, 'modules_opt': 'none'}
+                'gpu_mode': False, 'module_purge': False}
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
         xml_node = tree.getroot().find('cmd_line')
@@ -633,13 +584,13 @@ def create_new_case():
 
     if opts.path is None:
         opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
-    
+
     # Log
     # ===
     log = 'Setting up case {:s} in {:s}'.format(opts.name, opts.path)
     under = '-' * len(log)
     print(log + '\n' + under)
-        
+
     # Transfer data
     # =============
     # - ML - For now, no choice for the I/O directory structure
@@ -666,7 +617,7 @@ def create_new_case():
         for f in os.listdir(opts.oas_in):
             os.remove(os.path.join(opts.path, f))
     check_call(['rsync', '-avr', opts.oas_nml+'/', opts.path])
-        
+
     # Create case instance
     # ====================
     cc2case = case(name=opts.name, path=opts.path,
@@ -675,9 +626,9 @@ def create_new_case():
                    COSMO_exe=os.path.basename(opts.cos_exe),
                    CESM_exe=os.path.basename(opts.cesm_exe),
                    wall_time=opts.wall_time, account=opts.account,
-                   ncosx=opts.ncosx, ncosy=opts.ncosy, ncosio=opts.ncosio, ncesm=opts.ncesm,
+                   ncosx=opts.ncosx, ncosy=opts.ncosy, ncesm=opts.ncesm,
                    gpu_mode=opts.gpu_mode,
-                   modules_opt=opts.modules_opt,
+                   module_purge=opts.module_purge,
                    dummy_day=opts.dummy_day)
 
     # Change parameters from xml file if required
@@ -729,7 +680,6 @@ def create_new_case():
     if opts.submit:
         cc2case.submit()
 
-        
 def apply_defaults(opts, xml_node, defaults):
     """Set options with opts > xml_file > defaults"""
     for opt, default  in defaults.items():
@@ -757,7 +707,6 @@ def apply_defaults(opts, xml_node, defaults):
         if apply_def:
             setattr(opts, opt, default)
 
-
 def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
                          run_length, dh, dummy_day, ext):
 
@@ -770,7 +719,7 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
     else:
         d2 = datetime.strptime(end_date, date_fmt_in)
     delta = timedelta(seconds=dh*3600.0)
-    
+
     def check_input(root, date, file_list, dummy=False):
         file_name = root + format(date.strftime(date_fmt_cosmo)) + ext
         if os.path.exists(os.path.join(src_dir, file_name)):
@@ -796,7 +745,7 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
             # return False
         else:
             raise ValueError("input file {:s} is missing".format(file_name))
-    
+
     # Check all input files for current period
     with open('transfer_list', mode ='w') as t_list:
         check_input('laf', d1, t_list)
@@ -806,7 +755,7 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
             cur_date += delta
     check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                 os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
-    
+
     # Add a dummy day to produce last COSMO output
     if dummy_day:
         do_transfer = False
@@ -817,9 +766,8 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
         if do_transfer:
             check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                         os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
-            
+
     os.remove('transfer_list')
-                        
 
 def control_case():
     # Parse arguments
