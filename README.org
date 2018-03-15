@@ -1,75 +1,81 @@
-* COSMO_CLM2_tools
-  Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.cscs.ch/computers/piz_daint/index.html][Piz Daint]] only)
+# Created 2018-03-15 Thu 17:12
+#+TITLE: COSMO_CLM^2 simulation setup tools
+#+AUTHOR: Matthieu Leclair
+#+EXPORT_FILE_NAME: README
+#+STARTUP: overview
+
+Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.cscs.ch/computers/piz_daint/index.html][Piz Daint]] only)
 
 * Install
-  - Install COSMO_CLM2_tools
-    #+BEGIN_SRC shell
-      git clone https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
-      cd COSMO_CLM2_tools
-      python2 setup.py install --user
-    #+END_SRC
-  - Make sure =~/.local/bin= is in your path
+- Install COSMO_CLM2_tools
+  #+BEGIN_SRC shell
+    git clone https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
+    cd COSMO_CLM2_tools
+    python2 setup.py install --user
+  #+END_SRC
+- Make sure =~/.local/bin= is in your path
 
 * Usage
-  More comprehensive help will follow. Essentially the tool provides
-  the cc2_create_case command. This is the result of ~cc2_create_case --help~:
-  #+BEGIN_SRC text
-    usage: cc2_create_case [-h] [-s FILE] [--name NAME] [--path PATH]
-                           [--start_date DATE_1] [--end_date DATE_2]
-                           [--run_length dt] [--cos_in COS_IN] [--cos_nml COS_NML]
-                           [--cos_exe COS_EXE] [--cesm_in CESM_IN]
-                           [--cesm_nml CESM_NML] [--cesm_exe CESM_EXE]
-                           [--oas_in OAS_IN] [--oas_nml OAS_NML] [--ncosx NCOSX]
-                           [--ncosy NCOSY] [--ncesm NCESM] [--wall_time WALL_TIME]
-                           [--account ACCOUNT] [--gpu_mode GPU_MODE]
-                           [--module_purge MODULE_PURGE] [--dummy_day DUMMY_DAY]
-                           [--no_submit] [--gen_oasis]
-
-    Set up and run a COSMO_CLM2 case
-    --------------------------------
-    Options can be set up either by xml file or the following command line arguments.
-    xml file options must be stored in a subelement of the root element tagged 'cmd_line'.
-    Command line arguments have precedence over xml file ones.
-
-    optional arguments:
-      -h, --help            show this help message and exit
-      -s FILE, --setup-file FILE
-                            xml file conatining setup options
-      --name NAME           case name (default: 'COSMO_CLM2')
-      --path PATH           directory where the case is set up (default: $SCRATCH/NAME)
-      --start_date DATE_1   simulation start date formatted as YYYY-MM-DD-HH
-      --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
-      --run_length dt       sets simulation length if end_date not specified or run length
-                            between restarts otherwise
-                            dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'
-                            N1, N2 and N3 being arbitrary integers (N2>12 posible) and
-                            'y', 'm' and 'd' stand for year, month and day
-      --cos_in COS_IN       COSMO input files directory (default: './COSMO_input')
-      --cos_nml COS_NML     COSMO namelists directory (default: './COSMO_nml')
-      --cos_exe COS_EXE     path to COSMO executable (default: './cosmo')
-      --cesm_in CESM_IN     CESM input files directory (default: './CESM_input')
-      --cesm_nml CESM_NML   CESM namelists directory (default: './CESM_nml')
-      --cesm_exe CESM_EXE   CESM executable (default: './cesm.exe')
-      --oas_in OAS_IN       OASIS input files directory (default: './OASIS_input')
-      --oas_nml OAS_NML     OASIS namelists directory (default: './OASIS_nml')
-      --ncosx NCOSX         number of subdomains along the 'x-axis'
-                            for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
-      --ncosy NCOSY         number of subdomains along the 'y-axis'
-                            for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
-      --ncesm NCESM         number of subdomains for CESM domain decomposition'
-                            (type: int, default: from drv_in namelist)
-      --wall_time WALL_TIME
-                            reserved time on compute nodes (default: '24:00:00')
-      --account ACCOUNT     account to use for batch script (default: infered from $ROJECT)
-      --gpu_mode GPU_MODE   run COSMO on gpu (type: bool, default: False)
-      --module_purge MODULE_PURGE
-                            purge modules before loading and running (type: bool, default: False)
-      --dummy_day DUMMY_DAY
-                            perform a dummy day run after end of simulation to get last COSMO output.
-                            (type: bool, default: True)
-      --no_submit           do not submit job after setup
-                            only command line argument, cannot be set in xml file
-      --gen_oasis           generate OASIS auxiliary files
-                            note that OASIS will crash after producing the files
-                            only command line argument, cannot be set in xml file
-  #+END_SRC
+More comprehensive help will follow. Essentially the tool provides
+the cc2_create_case command. This is the result of =cc2_create_case
+  --help=:
+#+BEGIN_SRC text
+  usage: cc2_create_case [-h] [-s FILE] [--name NAME] [--path PATH]
+                         [--start_date DATE_1] [--end_date DATE_2]
+                         [--run_length dt] [--cos_in COS_IN] [--cos_nml COS_NML]
+                         [--cos_exe COS_EXE] [--cesm_in CESM_IN]
+                         [--cesm_nml CESM_NML] [--cesm_exe CESM_EXE]
+                         [--oas_in OAS_IN] [--oas_nml OAS_NML] [--ncosx NCOSX]
+                         [--ncosy NCOSY] [--ncesm NCESM] [--wall_time WALL_TIME]
+                         [--account ACCOUNT] [--gpu_mode GPU_MODE]
+                         [--module_purge MODULE_PURGE] [--dummy_day DUMMY_DAY]
+                         [--no_submit] [--gen_oasis]
+  
+  Set up and run a COSMO_CLM2 case
+  --------------------------------
+  Options can be set up either by xml file or the following command line arguments.
+  xml file options must be stored in a subelement of the root element tagged 'cmd_line'.
+  Command line arguments have precedence over xml file ones.
+  
+  optional arguments:
+    -h, --help            show this help message and exit
+    -s FILE, --setup-file FILE
+                          xml file conatining setup options
+    --name NAME           case name (default: 'COSMO_CLM2')
+    --path PATH           directory where the case is set up (default: $SCRATCH/NAME)
+    --start_date DATE_1   simulation start date formatted as YYYY-MM-DD-HH
+    --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
+    --run_length dt       sets simulation length if end_date not specified or run length
+                          between restarts otherwise
+                          dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'
+                          N1, N2 and N3 being arbitrary integers (N2>12 posible) and
+                          'y', 'm' and 'd' stand for year, month and day
+    --cos_in COS_IN       COSMO input files directory (default: './COSMO_input')
+    --cos_nml COS_NML     COSMO namelists directory (default: './COSMO_nml')
+    --cos_exe COS_EXE     path to COSMO executable (default: './cosmo')
+    --cesm_in CESM_IN     CESM input files directory (default: './CESM_input')
+    --cesm_nml CESM_NML   CESM namelists directory (default: './CESM_nml')
+    --cesm_exe CESM_EXE   CESM executable (default: './cesm.exe')
+    --oas_in OAS_IN       OASIS input files directory (default: './OASIS_input')
+    --oas_nml OAS_NML     OASIS namelists directory (default: './OASIS_nml')
+    --ncosx NCOSX         number of subdomains along the 'x-axis'
+                          for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
+    --ncosy NCOSY         number of subdomains along the 'y-axis'
+                          for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
+    --ncesm NCESM         number of subdomains for CESM domain decomposition'
+                          (type: int, default: from drv_in namelist)
+    --wall_time WALL_TIME
+                          reserved time on compute nodes (default: '24:00:00')
+    --account ACCOUNT     account to use for batch script (default: infered from $ROJECT)
+    --gpu_mode GPU_MODE   run COSMO on gpu (type: bool, default: False)
+    --module_purge MODULE_PURGE
+                          purge modules before loading and running (type: bool, default: False)
+    --dummy_day DUMMY_DAY
+                          perform a dummy day run after end of simulation to get last COSMO output.
+                          (type: bool, default: True)
+    --no_submit           do not submit job after setup
+                          only command line argument, cannot be set in xml file
+    --gen_oasis           generate OASIS auxiliary files
+                          note that OASIS will crash after producing the files
+                          only command line argument, cannot be set in xml file
+#+END_SRC
