@@ -645,7 +645,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
           # Parse setup options from command line and xml file
           # ==================================================
-    
+
           # Options from command line
           # -------------------------
           dsc = "Set up and run a COSMO_CLM2 case\n"\
@@ -703,7 +703,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           opts = parser.parse_args()
           if opts.gen_oasis:
               opts.dummy_day = False
-    
+
           # Set options to xml value if needed or default if nothing provided
           # -----------------------------------------------------------------
           defaults = {'name': 'COSMO_CLM2', 'path': None, 'start_date': None, 'end_date': None,
@@ -722,13 +722,13 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
           if opts.path is None:
               opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
-    
+
           # Log
           # ===
           log = 'Setting up case {:s} in {:s}'.format(opts.name, opts.path)
           under = '-' * len(log)
           print(log + '\n' + under)
-        
+
           # Transfer data
           # =============
           # - ML - For now, no choice for the I/O directory structure
@@ -755,7 +755,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               for f in os.listdir(opts.oas_in):
                   os.remove(os.path.join(opts.path, f))
           check_call(['rsync', '-avr', opts.oas_nml+'/', opts.path])
-        
+
           # Create case instance
           # ====================
           cc2case = case(name=opts.name, path=opts.path,
