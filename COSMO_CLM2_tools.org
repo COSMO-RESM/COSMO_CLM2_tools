@@ -378,8 +378,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
           def write_open_nml(self):
               self.nml.write_all()
-        
-    
+
+
           def _create_missing_dirs(self):
               # COSMO
               # -----
@@ -406,7 +406,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diri'])
                   self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diro'])
 
-                    
+
           def _mk_miss_path(self, rel_path):
               path = os.path.join(self.path, rel_path)
               if not os.path.exists(path):
@@ -466,6 +466,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                       script.write('MPICH_RDMA_ENABLED_CUDA=1\n')
                       script.write('export MPICH_G2G_PIPELINE=256\n')
                       script.write('\n')
+                  # - ML - That is supposed to be redondant with the -l option to /bin/bash
+                  # script.write('source /etc/bash.bashrc.local\n')
                   script.write('cc2_control_case ./config.xml\n')
 
 
@@ -485,7 +487,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   else:
                       if level and (not elem.tail or not elem.tail.strip()):
                           elem.tail = i
-                    
+
               config = ET.Element('config')
               tree = ET.ElementTree(config)
               ET.SubElement(config, 'name').text = self.name
@@ -502,7 +504,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               ET.SubElement(config, 'dummy_day', attrib={'type': 'bool'}).text = '1' if self.dummy_day else ''
               indent(config)
               tree.write(os.path.join(self.path, file_name), xml_declaration=True)
-            
+
 
           def set_next_run(self):
               if ((self._run_start_date >= self._end_date) or
@@ -544,7 +546,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               check_call(['sbatch', 'controller', './config.xml'])
               os.chdir(cwd)
 
-        
+
           def run(self):
               cwd = os.getcwd()
               # Clean workdir

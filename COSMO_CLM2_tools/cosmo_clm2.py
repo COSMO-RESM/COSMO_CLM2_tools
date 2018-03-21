@@ -373,6 +373,8 @@ class case(object):
                 script.write('MPICH_RDMA_ENABLED_CUDA=1\n')
                 script.write('export MPICH_G2G_PIPELINE=256\n')
                 script.write('\n')
+            # - ML - That is supposed to be redondant with the -l option to /bin/bash
+            # script.write('source /etc/bash.bashrc.local\n')
             script.write('cc2_control_case ./config.xml\n')
 
 
