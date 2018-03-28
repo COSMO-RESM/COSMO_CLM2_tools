@@ -32,7 +32,7 @@ class case(object):
                  COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
                  wall_time='24:00:00', account=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
-                 gpu_mode=False, modules_opt='none',
+                 gpu_mode=False, modules_opt=None, pgi_version=None,
                  dummy_day=True):
         # Basic init (no particular work required)
         self.run_length = run_length
@@ -42,6 +42,7 @@ class case(object):
         self.account = account
         self.gpu_mode = gpu_mode
         self.modules_opt = modules_opt
+        self.pgi_version = pgi_version
         self.dummy_day = dummy_day
         # Settings involving namelist changes
         self.path = path
@@ -339,7 +340,7 @@ class case(object):
                                               self._run_start_date.strftime(date_fmt_cesm),
                                               self._run_end_date.strftime(date_fmt_cesm))
         with open(os.path.join(self.path, 'controller'), mode='w') as script:
-            script.write('#!/bin/bash -l\n')
+            script.write('#!/usr/bin/env bash\n')
             script.write('#SBATCH --constraint=gpu\n')
             script.write('#SBATCH --job-name={:s}\n'.format(self.name))
             script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
@@ -348,12 +349,23 @@ class case(object):
             script.write('#SBATCH --account={:s}\n'.format(self.account))
             script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
             script.write('\n')
-            if self.modules_opt == 'purge':
-                script.write('module purge\n')
-                script.write('module load PrgEnv-pgi\n')
-                script.write('module load cray-netcdf\n')
-            elif self.modules_opt == 'switch':
-                script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
+            script.write('module list\n')
+            if self.gpu_mode:
+                script.write('source /etc/bash.bashrc.local\n')
+            if self.modules_opt:
+                if self.modules_opt == 'purge':
+                    script.write('module purge\n')
+                    script.write('module load PrgEnv-pgi\n')
+                elif self.modules_opt == 'switch':
+                    script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
+                if self.pgi_version:
+                    script.write('module unload pgi\n')
+                    if self.pgi_version == '17.10.0':
+                        script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
+                        script.write('module load pgi/17.10\n')
+                        script.write('export PGI_VERS_STR=17.10.0\n')
+                    else:
+                        script.write('module load pgi/{:s}\n'.format(self.pgi_version))
                 script.write('module load cray-netcdf\n')
             script.write('module list\n')
             script.write('\n')
@@ -373,8 +385,6 @@ class case(object):
                 script.write('MPICH_RDMA_ENABLED_CUDA=1\n')
                 script.write('export MPICH_G2G_PIPELINE=256\n')
                 script.write('\n')
-            # - ML - That is supposed to be redondant with the -l option to /bin/bash
-            # script.write('source /etc/bash.bashrc.local\n')
             script.write('cc2_control_case ./config.xml\n')
 
 
@@ -407,7 +417,10 @@ class case(object):
         ET.SubElement(config, 'wall_time').text = self.wall_time
         ET.SubElement(config, 'account').text = self.account
         ET.SubElement(config, 'gpu_mode', attrib={'type': 'bool'}).text = '1' if self.gpu_mode else ''
-        ET.SubElement(config, 'modules_opt').text = self.modules_opt
+        if self.modules_opt is not None:
+            ET.SubElement(config, 'modules_opt').text = self.modules_opt
+        if self.pgi_version is not None:
+            ET.SubElement(config, 'pgi_version').text = self.pgi_version
         ET.SubElement(config, 'dummy_day', attrib={'type': 'bool'}).text = '1' if self.dummy_day else ''
         indent(config)
         tree.write(os.path.join(self.path, file_name), xml_declaration=True)
@@ -562,7 +575,7 @@ def create_new_case():
                         help="sets simulation length if end_date not specified or run length\n"\
                         "between restarts otherwise\n"\
                         "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'\n"\
-                        "N1, N2 and N3 being arbitrary integers (N2>12 posible) and\n"\
+                        "N1, N2 and N3 being arbitrary integers (N2>12 possible) and\n"\
                         "'y', 'm' and 'd' stand for year, month and day")
     parser.add_argument('--cos_in', help="COSMO input files directory (default: './COSMO_input')")
     parser.add_argument('--cos_nml', help="COSMO namelists directory (default: './COSMO_nml')")
@@ -583,8 +596,10 @@ def create_new_case():
     parser.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
     parser.add_argument('--account', help="account to use for batch script (default: infered from $ROJECT)")
     parser.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
-    parser.add_argument('--modules_opt', choices=['none', 'switch', 'purge'],
-                        help="Option for loading modules at run time (default: 'none')")
+    parser.add_argument('--modules_opt', choices=['switch', 'purge'],
+                        help="Option for loading modules at run time (default: None)")
+    parser.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0'],
+                        help="specify pgi compiler version (default: None)")
     parser.add_argument('--dummy_day', type=bool,
                         help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                         "(type: bool, default: True)")
@@ -609,7 +624,7 @@ def create_new_case():
                 'cesm_exe': './cesm.exe', 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
                 'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
                 'wall_time': '24:00:00', 'account': None, 'dummy_day': True,
-                'gpu_mode': False, 'modules_opt': 'none'}
+                'gpu_mode': False, 'modules_opt': None, 'pgi_version': None}
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
         xml_node = tree.getroot().find('cmd_line')
@@ -663,7 +678,7 @@ def create_new_case():
                    wall_time=opts.wall_time, account=opts.account,
                    ncosx=opts.ncosx, ncosy=opts.ncosy, ncosio=opts.ncosio, ncesm=opts.ncesm,
                    gpu_mode=opts.gpu_mode,
-                   modules_opt=opts.modules_opt,
+                   modules_opt=opts.modules_opt, pgi_version=opts.pgi_version,
                    dummy_day=opts.dummy_day)
 
     # Change parameters from xml file if required

@@ -1,4 +1,4 @@
-# Created 2018-03-15 Thu 17:26
+# Created 2018-03-28 Wed 18:01
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
 #+EXPORT_FILE_NAME: README
@@ -28,8 +28,8 @@ the cc2_create_case command. This is the result of =cc2_create_case
                          [--oas_in OAS_IN] [--oas_nml OAS_NML] [--ncosx NCOSX]
                          [--ncosy NCOSY] [--ncosio NCOSIO] [--ncesm NCESM]
                          [--wall_time WALL_TIME] [--account ACCOUNT]
-                         [--gpu_mode GPU_MODE]
-                         [--modules_opt {none,switch,purge}]
+                         [--gpu_mode GPU_MODE] [--modules_opt {switch,purge}]
+                         [--pgi_version {16.9.0,17.5.0,17.10.0}]
                          [--dummy_day DUMMY_DAY] [--no_submit] [--gen_oasis]
   
   Set up and run a COSMO_CLM2 case
@@ -49,7 +49,7 @@ the cc2_create_case command. This is the result of =cc2_create_case
     --run_length dt       sets simulation length if end_date not specified or run length
                           between restarts otherwise
                           dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'
-                          N1, N2 and N3 being arbitrary integers (N2>12 posible) and
+                          N1, N2 and N3 being arbitrary integers (N2>12 possible) and
                           'y', 'm' and 'd' stand for year, month and day
     --cos_in COS_IN       COSMO input files directory (default: './COSMO_input')
     --cos_nml COS_NML     COSMO namelists directory (default: './COSMO_nml')
@@ -71,8 +71,10 @@ the cc2_create_case command. This is the result of =cc2_create_case
                           reserved time on compute nodes (default: '24:00:00')
     --account ACCOUNT     account to use for batch script (default: infered from $ROJECT)
     --gpu_mode GPU_MODE   run COSMO on gpu (type: bool, default: False)
-    --modules_opt {none,switch,purge}
-                          Option for loading modules at run time (default: 'none')
+    --modules_opt {switch,purge}
+                          Option for loading modules at run time (default: None)
+    --pgi_version {16.9.0,17.5.0,17.10.0}
+                          specify pgi compiler version (default: None)
     --dummy_day DUMMY_DAY
                           perform a dummy day run after end of simulation to get last COSMO output.
                           (type: bool, default: True)
