@@ -86,7 +86,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 * COSMO_CLM2_tools                                                 :noexport:
 ** cosmo_clm2.py
    :PROPERTIES:
-   :header-args: :tangle COSMO_CLM2_tools/cosmo_clm2.py
+   :header-args: :tangle COSMO_CLM2_tools/cosmo_clm2.py :comments link
    :END:
 *** preamble
     #+BEGIN_SRC python
@@ -584,7 +584,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           def __init__(self, cc2case):
               dict.__init__(self)
               self.cc2case = cc2case
-    
+
           def __getitem__(self, key):
               if key not in self:
                   self[key] = f90nml.read(os.path.join(self.cc2case.path, key))
@@ -592,7 +592,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
           def write(self, name):
               self[name].write(os.path.join(self.cc2case.path, name), force=True)
-    
+
           def write_all(self):
               for name, nml in self.items():
                   self.write(name)
@@ -607,14 +607,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
            where dt_str is a string of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d',
            N1, N2 and N3 being arbitrary integers potentially including sign and
            'y', 'm' and 'd' the actual letters standing for year, month and day respectivly."""
-        
+
            ky, km, kd, ny, nm, nd = 0, 0, 0, 0, 0, 0
            for k, c in enumerate(dt_str):
                if c == 'y':
                    ky, ny = k, int(dt_str[0:k])
                if c == 'm':
                    km, nm = k, int(dt_str[ky:k])
-            
+
            if km == 0 and ky == 0:
                for k, c in enumerate(dt_str):
                    if c == 'd':
@@ -635,7 +635,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
     #+BEGIN_SRC python
       def case_from_xml(xml_file):
           """Build a COSMO_CLM2 case from xml file"""
-    
+
           config = ET.parse(os.path.normpath(xml_file)).getroot()
           args={}
           for opt in config.iter():
@@ -649,7 +649,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                       else:
                           raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
                                            + " is not a valid python type")
-    
+
           return case(**args)
     #+END_SRC
 
@@ -883,7 +883,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           else:
               d2 = datetime.strptime(end_date, date_fmt_in)
           delta = timedelta(seconds=dh*3600.0)
-    
+
           def check_input(root, date, file_list, dummy=False):
               file_name = root + format(date.strftime(date_fmt_cosmo)) + ext
               if os.path.exists(os.path.join(src_dir, file_name)):
@@ -909,7 +909,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   # return False
               else:
                   raise ValueError("input file {:s} is missing".format(file_name))
-    
+
           # Check all input files for current period
           with open('transfer_list', mode ='w') as t_list:
               check_input('laf', d1, t_list)
@@ -919,7 +919,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   cur_date += delta
           check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                       os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
-    
+
           # Add a dummy day to produce last COSMO output
           if dummy_day:
               do_transfer = False
@@ -930,7 +930,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               if do_transfer:
                   check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                               os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
-            
+
           os.remove('transfer_list')
     #+END_SRC
 
@@ -957,12 +957,12 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
     #+END_SRC
 
 ** __init__.py
-   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/__init__.py
+   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/__init__.py :comments link
    
    #+END_SRC
 
 * setup.py                                                         :noexport:
-  #+BEGIN_SRC python :tangle setup.py
+  #+BEGIN_SRC python :tangle setup.py :comments link
     import os
     from setuptools import setup
     # try:
@@ -978,7 +978,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           url="https://github.com/COSMO-RESM/COSMO-CLM2_tools",
           packages=['COSMO_CLM2_tools'],
           entry_points={'console_scripts': ['cc2_create_case = COSMO_CLM2_tools.cosmo_clm2:create_new_case',
-                                            'cc2_control_case = COSMO_CLM2_tools.cosmo_clm2:control_case'],},
+                                            'cc2_control_case = COSMO_CLM2_tools.cosmo_clm2:control_case']},
           install_requires=['f90nml>=1.0.2']
     )
   #+END_SRC

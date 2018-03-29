@@ -1,3 +1,4 @@
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*preamble][preamble:1]]
 from __future__ import print_function
 from subprocess import check_call
 from argparse import ArgumentParser, RawTextHelpFormatter
@@ -15,7 +16,9 @@ import time
 date_fmt_in = '%Y-%m-%d-%H'
 date_fmt_cosmo = '%Y%m%d%H'
 date_fmt_cesm = '%Y%m%d'
+# preamble:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*class%20case][class case:1]]
 class case(object):
     """Class defining a COSMO-CLM2 case"""
 
@@ -480,7 +483,9 @@ class case(object):
         elapsed = time.time() - start_time
         print("\nCase {name:s} ran in {elapsed:.2f}\n".format(name=self.name, elapsed=elapsed))
         os.chdir(cwd)
+# class case:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*class%20nmldict][class nmldict:1]]
 class nmldict(dict):
     """Dictionnary of all the namelists of a case. Only load tha namelist if needed"""
     def __init__(self, cc2case):
@@ -498,7 +503,9 @@ class nmldict(dict):
     def write_all(self):
         for name, nml in self.items():
             self.write(name)
+# class nmldict:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*add_time_from_str][add_time_from_str:1]]
 def add_time_from_str(date1, dt_str):
     """Increment date from a string
 
@@ -527,7 +534,9 @@ def add_time_from_str(date1, dt_str):
         y2 += ny + (nm+m2-1) // 12
         m2 = (nm+m2-1) % 12 + 1
         return datetime(y2, m2, d2, h2)
+# add_time_from_str:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*case_from_xml][case_from_xml:1]]
 def case_from_xml(xml_file):
     """Build a COSMO_CLM2 case from xml file"""
 
@@ -546,7 +555,9 @@ def case_from_xml(xml_file):
                                      + " is not a valid python type")
 
     return case(**args)
+# case_from_xml:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*create_new_case][create_new_case:1]]
 def create_new_case():
     """Create a new Cosmo-CLM2 case"""
 
@@ -729,7 +740,9 @@ def create_new_case():
     # ===========
     if opts.submit:
         cc2case.submit()
+# create_new_case:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*apply_defaults][apply_defaults:1]]
 def apply_defaults(opts, xml_node, defaults):
     """Set options with opts > xml_file > defaults"""
     for opt, default  in defaults.items():
@@ -756,7 +769,9 @@ def apply_defaults(opts, xml_node, defaults):
                                              + " is not a valid python type")
         if apply_def:
             setattr(opts, opt, default)
+# apply_defaults:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*transfer_COSMO_input][transfer_COSMO_input:1]]
 def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
                          run_length, dh, dummy_day, ext):
 
@@ -818,7 +833,9 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
                         os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
 
     os.remove('transfer_list')
+# transfer_COSMO_input:1 ends here
 
+# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*control_case][control_case:1]]
 def control_case():
     # Parse arguments
     dsc = "Control a COSMO_CLM2 case"
@@ -837,3 +854,4 @@ def control_case():
     # Submit next run
     if cc2case.set_next_run():
         cc2case.submit()
+# control_case:1 ends here
