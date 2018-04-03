@@ -453,14 +453,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                           script.write('module load PrgEnv-pgi\n')
                       elif self.modules_opt == 'switch':
                           script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
-                      if self.pgi_version:
+                      if self.pgi_version == '16.9.0':
                           script.write('module unload pgi\n')
-                          if self.pgi_version == '17.10.0':
-                              script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
-                              script.write('module load pgi/17.10\n')
-                              script.write('export PGI_VERS_STR=17.10.0\n')
-                          else:
-                              script.write('module load pgi/{:s}\n'.format(self.pgi_version))
+                          script.write('module load pgi/16.9.0\n')
+                      elif self.pgi_version == '17.10.0':
+                          script.write('module unload pgi\n')
+                          script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
+                          script.write('module load pgi/17.10\n')
+                          script.write('export PGI_VERS_STR=17.10.0\n')
                       script.write('module load cray-netcdf\n')
                   script.write('module list\n')
                   script.write('\n')
