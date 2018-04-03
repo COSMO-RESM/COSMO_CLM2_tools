@@ -605,7 +605,7 @@ def create_new_case():
     parser.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
                         "(type: int, default: from drv_in namelist)")
     parser.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
-    parser.add_argument('--account', help="account to use for batch script (default: infered from $ROJECT)")
+    parser.add_argument('--account', help="account to use for batch script (default: infered from $PROJECT)")
     parser.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
     parser.add_argument('--modules_opt', choices=['switch', 'purge'],
                         help="Option for loading modules at run time (default: None)")
