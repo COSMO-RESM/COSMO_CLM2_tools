@@ -707,7 +707,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           parser.add_argument('--modules_opt', choices=['switch', 'purge'],
                               help="Option for loading modules at run time (default: None)")
           parser.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0'],
-                              help="specify pgi compiler version (default: None)")
+                              help="specify pgi compiler version at run time (default: None)\n"\
+                              "Only effective if modules_opt is either 'switch' or 'purge'")
           parser.add_argument('--dummy_day', type=bool,
                               help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                               "(type: bool, default: True)")
