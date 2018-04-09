@@ -33,7 +33,7 @@ class case(object):
     def __init__(self, name='COSMO_CLM2', path=None,
                  start_date=None, end_date=None, run_length=None,
                  COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
-                 wall_time='24:00:00', account=None,
+                 wall_time='24:00:00', account=None, partition=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, modules_opt=None, pgi_version=None,
                  dummy_day=True):
@@ -46,6 +46,7 @@ class case(object):
         self.gpu_mode = gpu_mode
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version
+        self.partition = partition
         self.dummy_day = dummy_day
         # Settings involving namelist changes
         self.path = path
@@ -351,6 +352,8 @@ class case(object):
             script.write('#SBATCH --error={:s}\n'.format(logfile))
             script.write('#SBATCH --account={:s}\n'.format(self.account))
             script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
+            if self.partition is not None:
+                script.write('#SBATCH --partition={:s}\n'.format(self.partition))
             script.write('\n')
             script.write('module list\n')
             if self.gpu_mode:
@@ -385,7 +388,7 @@ class case(object):
                 script.write('# Use for gpu mode\n')
                 script.write('export MV2_ENABLE_AFFINITY=0\n')
                 script.write('export MV2_USE_CUDA=1\n')
-                script.write('MPICH_RDMA_ENABLED_CUDA=1\n')
+                script.write('MPICH_RDMA_ENABLED_CUDA=enabled\n')
                 script.write('export MPICH_G2G_PIPELINE=256\n')
                 script.write('\n')
             script.write('cc2_control_case ./config.xml\n')
@@ -419,6 +422,8 @@ class case(object):
         ET.SubElement(config, 'CESM_exe').text = self.CESM_exe
         ET.SubElement(config, 'wall_time').text = self.wall_time
         ET.SubElement(config, 'account').text = self.account
+        if self.partition is not None:
+            ET.SubElement(config, 'partition').text = self.partition
         ET.SubElement(config, 'gpu_mode', attrib={'type': 'bool'}).text = '1' if self.gpu_mode else ''
         if self.modules_opt is not None:
             ET.SubElement(config, 'modules_opt').text = self.modules_opt
@@ -606,6 +611,7 @@ def create_new_case():
                         "(type: int, default: from drv_in namelist)")
     parser.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
     parser.add_argument('--account', help="account to use for batch script (default: infered from $PROJECT)")
+    parser.add_argument('--partition', help="select a queue (default: None)")
     parser.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
     parser.add_argument('--modules_opt', choices=['switch', 'purge'],
                         help="Option for loading modules at run time (default: None)")
@@ -635,7 +641,7 @@ def create_new_case():
                 'cos_exe': './cosmo', 'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml',
                 'cesm_exe': './cesm.exe', 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
                 'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
-                'wall_time': '24:00:00', 'account': None, 'dummy_day': True,
+                'wall_time': '24:00:00', 'account': None, 'partition': None, 'dummy_day': True,
                 'gpu_mode': False, 'modules_opt': None, 'pgi_version': None}
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
@@ -688,6 +694,7 @@ def create_new_case():
                    COSMO_exe=os.path.basename(opts.cos_exe),
                    CESM_exe=os.path.basename(opts.cesm_exe),
                    wall_time=opts.wall_time, account=opts.account,
+                   partition=opts.partition,
                    ncosx=opts.ncosx, ncosy=opts.ncosy, ncosio=opts.ncosio, ncesm=opts.ncesm,
                    gpu_mode=opts.gpu_mode,
                    modules_opt=opts.modules_opt, pgi_version=opts.pgi_version,
