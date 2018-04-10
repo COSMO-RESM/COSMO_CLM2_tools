@@ -36,11 +36,13 @@ class case(object):
                  wall_time='24:00:00', account=None, partition=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, modules_opt=None, pgi_version=None,
-                 dummy_day=True):
+                 dummy_day=True, cosmo_only=False):
         # Basic init (no particular work required)
+        self.cosmo_only = cosmo_only
         self.run_length = run_length
         self.COSMO_exe = COSMO_exe
-        self.CESM_exe = CESM_exe
+        if not self.cosmo_only:
+            self.CESM_exe = CESM_exe
         self.wall_time = wall_time
         self.account = account
         self.gpu_mode = gpu_mode
@@ -57,10 +59,7 @@ class case(object):
         self._compute_run_dates()   # defines _run_start_date, _run_end_date and _runtime (maybe _end_date)
         self._apply_run_dates()
         self._check_gribout()
-        self.ncosx = ncosx
-        self.ncosy = ncosy
-        self.ncosio = ncosio
-        self.ncesm = ncesm   # Keep that order betwen ncos* and ncesm as ncesm is adapted in gpu mode
+        self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
         self.write_open_nml()   # Nothing requires changing namelists after that
         # Create batch scripts
         self._build_proc_config()
@@ -118,63 +117,6 @@ class case(object):
             self._end_date = None
 
     @property
-    def ncosx(self):
-        return self._ncosx
-    @ncosx.setter
-    def ncosx(self, n):
-        if n is None:
-            self._ncosx = self.nml['INPUT_ORG']['runctl']['nprocx']
-        else:
-            self._ncosx = n
-            self.nml['INPUT_ORG']['runctl']['nprocx'] = n
-
-    @property
-    def ncosy(self):
-        return self._ncosy
-    @ncosy.setter
-    def ncosy(self, n):
-        if n is None:
-            self._ncosy = self.nml['INPUT_ORG']['runctl']['nprocy']
-        else:
-            self._ncosy = n
-            self.nml['INPUT_ORG']['runctl']['nprocy'] = n
-
-    @property
-    def ncosio(self):
-        return self._ncosio
-    @ncosio.setter
-    def ncosio(self, n):
-        if n is None:
-            self._ncosio = self.nml['INPUT_ORG']['runctl']['nprocio']
-        else:
-            self._ncosio = n
-            self.nml['INPUT_ORG']['runctl']['nprocio'] = n
-
-    @property
-    def ncesm(self):
-        return self._ncesm
-    @ncesm.setter
-    def ncesm(self, n):
-        # total number of COSMO tasks
-        self._ncos = self._ncosx * self._ncosy + self._ncosio
-        if self.gpu_mode:   # Populate nodes with CESM tasks except one
-            self._n_nodes = self._ncos
-            self._ncesm = self._n_nodes * (self._n_tasks_per_node - 1)
-        else:   # Determine number of CESM tasks and deduce number of nodes
-            if n is None:
-                self._ncesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
-            else:
-                self._ncesm = n
-            ntot = self._ncos + self._ncesm
-            if ntot % self._n_tasks_per_node != 0:
-                msg = "total number of tasks (ncosx x ncosy + ncosio + ncesm = {:d}) has to be divisible by {:d}"
-                raise ValueError(msg.format(ntot, self._n_tasks_per_node))
-            self._n_nodes = ntot // self._n_tasks_per_node
-        # Apply number of CESM tasks to all relevant namelist parameters
-        for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
-            self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
-
-    @property
     def account(self):
         return self._account
     @account.setter
@@ -189,20 +131,67 @@ class case(object):
     # =======
     # Methods
     # =======
+    def _organize_tasks(self, ncosx, ncosy, ncosio, ncesm):
+        # COSMO tasks
+        # -----------
+        if ncosx is None:
+            self._ncosx = self.nml['INPUT_ORG']['runctl']['nprocx']
+        else:
+            self._ncosx = ncosx
+            self.nml['INPUT_ORG']['runctl']['nprocx'] = ncosx
+        if ncosy is None:
+            self._ncosy = self.nml['INPUT_ORG']['runctl']['nprocy']
+        else:
+            self._ncosy = ncosy
+            self.nml['INPUT_ORG']['runctl']['nprocy'] = ncosy
+        if ncosio is None:
+            self._ncosio = self.nml['INPUT_ORG']['runctl']['nprocio']
+        else:
+            self._ncosio = ncosio
+            self.nml['INPUT_ORG']['runctl']['nprocio'] = ncosio
+        self._ncos = self._ncosx * self._ncosy + self._ncosio
+        # CESM tasks and number of nodes
+        # ------------------------------
+        if self.cosmo_only:
+            self._ncesm = 0
+            if self.gpu_mode:
+                self._n_nodes = self._ncos
+            else:
+                self._n_nodes = self._ncos // self._n_tasks_per_node
+        else:
+            if self.gpu_mode:   # Populate nodes with CESM tasks except one
+                self._n_nodes = self._ncos
+                self._ncesm = self._n_nodes * (self._n_tasks_per_node - 1)
+            else:   # Determine number of CESM tasks and deduce number of nodes
+                if ncesm is None:
+                    self._ncesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
+                else:
+                    self._ncesm = ncesm
+                ntot = self._ncos + self._ncesm
+                if ntot % self._n_tasks_per_node != 0:
+                    msg = "total number of tasks (ncosx x ncosy + ncosio + ncesm = {:d}) has to be divisible by {:d}"
+                    raise ValueError(msg.format(ntot, self._n_tasks_per_node))
+                self._n_nodes = ntot // self._n_tasks_per_node
+            # Apply number of CESM tasks to all relevant namelist parameters
+            for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
+                self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
+
+
     def _compute_run_dates(self):
         # Access to namelists
         # -------------------
         INPUT_ORG = self.nml['INPUT_ORG']
-        drv_in = self.nml['drv_in']
+        if not self.cosmo_only:
+            drv_in = self.nml['drv_in']
         # Read in _run_start_date
         # -----------------------
         date_cosmo = datetime.strptime(INPUT_ORG['runctl']['ydate_ini'], date_fmt_cosmo) \
                      + timedelta(hours=INPUT_ORG['runctl']['hstart'])
-        date_cesm = datetime.strptime(str(drv_in['seq_timemgr_inparm']['start_ymd']), date_fmt_cesm)
-        if date_cosmo != date_cesm:
-            raise ValueError("start dates are not identical in COSMO and CESM namelists")
-        else:
-            self._run_start_date = date_cosmo
+        if not self.cosmo_only:
+            date_cesm = datetime.strptime(str(drv_in['seq_timemgr_inparm']['start_ymd']), date_fmt_cesm)
+            if date_cosmo != date_cesm:
+                raise ValueError("start dates are not identical in COSMO and CESM namelists")
+        self._run_start_date = date_cosmo
         # Compute _runtime and _run_end_date (possibly _end_date)
         # -------------------------------------------------------
         if self._end_date is not None:
@@ -222,12 +211,12 @@ class case(object):
             if self.run_length is None:
                 runtime_cosmo = (INPUT_ORG['runctl']['nstop'] + 1) * INPUT_ORG['runctl']['dt'] \
                                 - INPUT_ORG['runctl']['hstart'] * 3600.0
-                runtime_cesm = drv_in['seq_timemgr_inparm']['stop_n']
-                if runtime_cosmo != runtime_cesm:
-                    raise ValueError("run lengths are not identical in COSMO and CESM namelists")
-                else:
-                    self._runtime = timedelta(seconds=runtime_cosmo)
-                    self._run_end_date = self._run_start_date + self._runtime
+                if not self.cosmo_only:
+                    runtime_cesm = drv_in['seq_timemgr_inparm']['stop_n']
+                    if runtime_cosmo != runtime_cesm:
+                        raise ValueError("run lengths are not identical in COSMO and CESM namelists")
+                self._runtime = timedelta(seconds=runtime_cosmo)
+                self._run_end_date = self._run_start_date + self._runtime
             else:
                 self._run_end_date = add_time_from_str(self._run_start_date, self.run_length)
                 self._runtime = self._run_end_date - self._run_start_date
@@ -243,22 +232,24 @@ class case(object):
         # Access to namelists
         INPUT_ORG = self.nml['INPUT_ORG']
         INPUT_IO = self.nml['INPUT_IO']
-        drv_in = self.nml['drv_in']
+        if not self.cosmo_only:
+            drv_in = self.nml['drv_in']
         # adapt INPUT_ORG
         INPUT_ORG['runctl']['nstop'] = int(hstop * 3600.0 // INPUT_ORG['runctl']['dt']) - 1
         # adapt INPUT_IO
         for gribout in self._get_gribouts():
             gribout['hcomb'][0:2] = hstart, hstop
         INPUT_IO['ioctl']['nhour_restart'] = [int(hstop), int(hstop), 24]
-        # adapt drv_in
-        drv_in['seq_timemgr_inparm']['stop_n'] = int(runtime_seconds)
-        drv_in['seq_timemgr_inparm']['restart_n'] = int(runtime_seconds)
-        # adapt namcouple
-        with open(os.path.join(self.path, 'namcouple_tmpl'), mode='r') as f:
-            content = f.read()
-        content = re.sub('_runtime_', str(int(self._runtime.total_seconds())), content)
-        with open(os.path.join(self.path, 'namcouple'), mode='w') as f:
-            f.write(content)
+        if not self.cosmo_only:
+            # adapt drv_in
+            drv_in['seq_timemgr_inparm']['stop_n'] = int(runtime_seconds)
+            drv_in['seq_timemgr_inparm']['restart_n'] = int(runtime_seconds)
+            # adapt namcouple
+            with open(os.path.join(self.path, 'namcouple_tmpl'), mode='r') as f:
+                content = f.read()
+            content = re.sub('_runtime_', str(int(self._runtime.total_seconds())), content)
+            with open(os.path.join(self.path, 'namcouple'), mode='w') as f:
+                f.write(content)
 
 
     def _check_gribout(self):
@@ -305,18 +296,19 @@ class case(object):
         self._mk_miss_path(self.nml['INPUT_IO']['ioctl']['ydir_restart_out'])
         # CESM
         # ----
-        # timing
-        # - ML - remove if exists before creating
-        shutil.rmtree(os.path.join(self.path, self.nml['drv_in']['seq_infodata_inparm']['timing_dir']),
-                      ignore_errors=True)
-        shutil.rmtree(os.path.join(self.path, self.nml['drv_in']['seq_infodata_inparm']['tchkpt_dir']),
-                      ignore_errors=True)
-        self._mk_miss_path(self.nml['drv_in']['seq_infodata_inparm']['timing_dir'])
-        self._mk_miss_path(self.nml['drv_in']['seq_infodata_inparm']['tchkpt_dir'])
-        # input / output
-        for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
-            self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diri'])
-            self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diro'])
+        if not self.cosmo_only:
+            # timing
+            # - ML - remove if exists before creating
+            shutil.rmtree(os.path.join(self.path, self.nml['drv_in']['seq_infodata_inparm']['timing_dir']),
+                          ignore_errors=True)
+            shutil.rmtree(os.path.join(self.path, self.nml['drv_in']['seq_infodata_inparm']['tchkpt_dir']),
+                          ignore_errors=True)
+            self._mk_miss_path(self.nml['drv_in']['seq_infodata_inparm']['timing_dir'])
+            self._mk_miss_path(self.nml['drv_in']['seq_infodata_inparm']['tchkpt_dir'])
+            # input / output
+            for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
+                self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diri'])
+                self._mk_miss_path(self.nml['{:s}_modelio.nml'.format(comp)]['modelio']['diro'])
 
 
     def _mk_miss_path(self, rel_path):
@@ -332,11 +324,13 @@ class case(object):
                 N = self._n_tasks_per_node
                 line = ",".join([str(k*N) for k in range(self._n_nodes)])
                 f.write("{:s} ./{:s}\n".format(line, self.COSMO_exe))
-                line = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
-                f.write("{:s} ./{:s}\n".format(line, self.CESM_exe))
+                if not self.cosmo_only:
+                    line = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
+                    f.write("{:s} ./{:s}\n".format(line, self.CESM_exe))
             else:
                 f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
-                f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
+                if not self.cosmo_only:
+                    f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
 
 
     def _build_controller(self):
@@ -415,11 +409,13 @@ class case(object):
         tree = ET.ElementTree(config)
         ET.SubElement(config, 'name').text = self.name
         ET.SubElement(config, 'path').text = self.path
+        ET.SubElement(config, 'cosmo_only', attrib={'type': 'bool'}).text = '1' if self.cosmo_only else ''
         ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt_in)
         ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt_in)
         ET.SubElement(config, 'run_length').text = self.run_length
         ET.SubElement(config, 'COSMO_exe').text = self.COSMO_exe
-        ET.SubElement(config, 'CESM_exe').text = self.CESM_exe
+        if not self.cosmo_only:
+            ET.SubElement(config, 'CESM_exe').text = self.CESM_exe
         ET.SubElement(config, 'wall_time').text = self.wall_time
         ET.SubElement(config, 'account').text = self.account
         if self.partition is not None:
@@ -441,13 +437,15 @@ class case(object):
         else:
             hstart = (self._run_end_date - self._start_date).total_seconds() // 3600.0
             self.nml['INPUT_ORG']['runctl']['hstart'] = hstart
-            self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt_cesm))
+            if not self.cosmo_only:
+                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt_cesm))
             self._compute_run_dates()
             # - ML - Setting ydirini might not be needed, try without at some point
             self.nml['INPUT_IO']['gribin']['ydirini'] = self.nml['INPUT_IO']['ioctl']['ydir_restart_out']
             for gribout in self._get_gribouts():
                 gribout['lwrite_const'] = False
-            self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'continue'
+            if not self.cosmo_only:
+                self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'continue'
             self.write_open_nml()
             self._update_controller()
             return True
@@ -583,6 +581,8 @@ def create_new_case():
     parser.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
     parser.add_argument('--name', help="case name (default: 'COSMO_CLM2')")
     parser.add_argument('--path', help="directory where the case is set up (default: $SCRATCH/NAME)")
+    parser.add_argument('--cosmo_only', help="Run only cosmo with build-in soil model TERRA (default: False)\n"\
+                        "Be carefull to provide a COSMO executable compiled accordingly")
     parser.add_argument('--start_date', metavar='DATE_1',
                         help="simulation start date formatted as YYYY-MM-DD-HH")
     parser.add_argument('--end_date', metavar='DATE_2',
@@ -636,13 +636,15 @@ def create_new_case():
 
     # Set options to xml value if needed or default if nothing provided
     # -----------------------------------------------------------------
-    defaults = {'name': 'COSMO_CLM2', 'path': None, 'start_date': None, 'end_date': None,
-                'run_length': None, 'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml',
-                'cos_exe': './cosmo', 'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml',
-                'cesm_exe': './cesm.exe', 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
+    defaults = {'name': 'COSMO_CLM2', 'path': None, 'cosmo_only': False,
+                'start_date': None, 'end_date': None, 'run_length': None,
+                'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
+                'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
+                'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
                 'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
-                'wall_time': '24:00:00', 'account': None, 'partition': None, 'dummy_day': True,
-                'gpu_mode': False, 'modules_opt': None, 'pgi_version': None}
+                'wall_time': '24:00:00', 'account': None, 'partition': None,
+                'dummy_day': True, 'gpu_mode': False,
+                'modules_opt': None, 'pgi_version': None}
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
         xml_node = tree.getroot().find('cmd_line')
@@ -676,19 +678,20 @@ def create_new_case():
                          opts.run_length, dh, opts.dummy_day, ext)
     check_call(['rsync', '-avr', opts.cos_nml+'/', opts.path])
     check_call(['rsync', '-avr', opts.cos_exe, opts.path])
-    check_call(['rsync', '-avr', opts.cesm_in+'/', opts.path+'/CESM_input/'])
-    check_call(['rsync', '-avr', opts.cesm_nml+'/', opts.path])
-    check_call(['rsync', '-avr', opts.cesm_exe, opts.path])
-    if not opts.gen_oasis:
-        check_call(['rsync', '-avr', opts.oas_in+'/', opts.path])
-    else:
-        for f in os.listdir(opts.oas_in):
-            os.remove(os.path.join(opts.path, f))
-    check_call(['rsync', '-avr', opts.oas_nml+'/', opts.path])
+    if not opts.cosmo_only:
+        check_call(['rsync', '-avr', opts.cesm_in+'/', opts.path+'/CESM_input/'])
+        check_call(['rsync', '-avr', opts.cesm_nml+'/', opts.path])
+        check_call(['rsync', '-avr', opts.cesm_exe, opts.path])
+        if not opts.gen_oasis:
+            check_call(['rsync', '-avr', opts.oas_in+'/', opts.path])
+        else:
+            for f in os.listdir(opts.oas_in):
+                os.remove(os.path.join(opts.path, f))
+        check_call(['rsync', '-avr', opts.oas_nml+'/', opts.path])
 
     # Create case instance
     # ====================
-    cc2case = case(name=opts.name, path=opts.path,
+    cc2case = case(name=opts.name, path=opts.path, cosmo_only=opts.cosmo_only,
                    start_date=opts.start_date, end_date=opts.end_date,
                    run_length=opts.run_length,
                    COSMO_exe=os.path.basename(opts.cos_exe),
