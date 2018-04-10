@@ -486,9 +486,9 @@ class case(object):
         start_time = time.time()
         if self.cosmo_only:
             if self.gpu_mode:
-                check_call(['srun', '-u', '--ntasks-per-node=1', '-n', str(self._n_nodes)])
+                check_call(['srun', '-u', '--ntasks-per-node=1', '-n', str(self._n_nodes), self.COSMO_exe])
             else:
-                check_call(['srun', '-u', '-n', str(self._n_nodes * self._n_tasks_per_node)])
+                check_call(['srun', '-u', '-n', str(self._n_nodes * self._n_tasks_per_node), self.COSMO_exe])
         else:
             check_call(['srun', '-u', '--multi-prog', './proc_config'])
         elapsed = time.time() - start_time
