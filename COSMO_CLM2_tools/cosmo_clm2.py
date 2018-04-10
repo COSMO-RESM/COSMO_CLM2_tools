@@ -62,7 +62,8 @@ class case(object):
         self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
         self.write_open_nml()   # Nothing requires changing namelists after that
         # Create batch scripts
-        self._build_proc_config()
+        if not self.cosmo_only:
+            self._build_proc_config()
         self._build_controller()
         # Create missing directories
         self._create_missing_dirs()
@@ -483,7 +484,13 @@ class case(object):
             os.remove(f)
         # Run
         start_time = time.time()
-        check_call(['srun', '-u', '--multi-prog', './proc_config'])
+        if self.cosmo_only:
+            if self.gpu_mode:
+                check_call(['srun', '-u', '--ntasks-per-node=1', '-n', str(self._n_nodes)])
+            else:
+                check_call(['srun', '-u', '-n', str(self._n_nodes * self._n_tasks_per_node)])
+        else:
+            check_call(['srun', '-u', '--multi-prog', './proc_config'])
         elapsed = time.time() - start_time
         print("\nCase {name:s} ran in {elapsed:.2f}\n".format(name=self.name, elapsed=elapsed))
         os.chdir(cwd)
