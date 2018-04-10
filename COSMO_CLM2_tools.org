@@ -181,7 +181,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           @name.setter
           def name(self, name):
               self._name = name
-              self.nml['drv_in']['seq_infodata_inparm']['case_name'] = name
+              if not self.cosmo_only:
+                  self.nml['drv_in']['seq_infodata_inparm']['case_name'] = name
 
           @property
           def start_date(self):
@@ -270,7 +271,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
                       self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
 
-    
+
           def _compute_run_dates(self):
               # Access to namelists
               # -------------------

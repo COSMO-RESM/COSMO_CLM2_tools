@@ -87,7 +87,8 @@ class case(object):
     @name.setter
     def name(self, name):
         self._name = name
-        self.nml['drv_in']['seq_infodata_inparm']['case_name'] = name
+        if not self.cosmo_only:
+            self.nml['drv_in']['seq_infodata_inparm']['case_name'] = name
 
     @property
     def start_date(self):
