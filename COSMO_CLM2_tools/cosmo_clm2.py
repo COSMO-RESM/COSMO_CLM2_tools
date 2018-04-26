@@ -638,7 +638,7 @@ def create_new_case():
                         help="specify pgi compiler version at run time (default: None)\n"\
                         "Only effective if modules_opt is either 'switch' or 'purge'")
     parser.add_argument('--no_login_shell', action='store_true',
-                        help="Add the '-l' option to the submit script shebang")
+                        help="Remove the '-l' option from the submit script shebang")
     parser.add_argument('--dummy_day', type=bool,
                         help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                         "(type: bool, default: True)")
