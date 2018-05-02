@@ -866,7 +866,8 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
             check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                         os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
 
-    os.remove('transfer_list')
+    if os.path.exists('transfer_list'):
+        os.remove('transfer_list')
 # transfer_COSMO_input:1 ends here
 
 # [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*control_case][control_case:1]]

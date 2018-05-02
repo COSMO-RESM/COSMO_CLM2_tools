@@ -967,7 +967,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   check_call(['rsync', '-avr', '--files-from', 'transfer_list',
                               os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
 
-          os.remove('transfer_list')
+          if os.path.exists('transfer_list'):
+              os.remove('transfer_list')
     #+END_SRC
 
 *** control_case
