@@ -20,16 +20,19 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
   --help=:
   #+BEGIN_SRC text
     usage: cc2_create_case [-h] [-s FILE] [--name NAME] [--path PATH]
-                           [--start_date DATE_1] [--end_date DATE_2]
-                           [--run_length dt] [--cos_in COS_IN] [--cos_nml COS_NML]
-                           [--cos_exe COS_EXE] [--cesm_in CESM_IN]
-                           [--cesm_nml CESM_NML] [--cesm_exe CESM_EXE]
-                           [--oas_in OAS_IN] [--oas_nml OAS_NML] [--ncosx NCOSX]
-                           [--ncosy NCOSY] [--ncosio NCOSIO] [--ncesm NCESM]
+                           [--cosmo_only COSMO_ONLY] [--start_date DATE_1]
+                           [--end_date DATE_2] [--run_length dt] [--cos_in COS_IN]
+                           [--cos_nml COS_NML] [--cos_exe COS_EXE]
+                           [--cesm_in CESM_IN] [--cesm_nml CESM_NML]
+                           [--cesm_exe CESM_EXE] [--oas_in OAS_IN]
+                           [--oas_nml OAS_NML] [--ncosx NCOSX] [--ncosy NCOSY]
+                           [--ncosio NCOSIO] [--ncesm NCESM]
                            [--wall_time WALL_TIME] [--account ACCOUNT]
-                           [--gpu_mode GPU_MODE] [--modules_opt {switch,purge}]
+                           [--partition PARTITION] [--gpu_mode GPU_MODE]
+                           [--modules_opt {switch,purge}]
                            [--pgi_version {16.9.0,17.5.0,17.10.0}]
-                           [--dummy_day DUMMY_DAY] [--no_submit] [--gen_oasis]
+                           [--login_shell LOGIN_SHELL] [--dummy_day DUMMY_DAY]
+                           [--no_submit] [--gen_oasis]
 
     Set up and run a COSMO_CLM2 case
     --------------------------------
@@ -43,6 +46,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                             xml file conatining setup options
       --name NAME           case name (default: 'COSMO_CLM2')
       --path PATH           directory where the case is set up (default: $SCRATCH/NAME)
+      --cosmo_only COSMO_ONLY
+                            Run only cosmo with build-in soil model TERRA (default: False)
+                            Be carefull to provide a COSMO executable compiled accordingly
       --start_date DATE_1   simulation start date formatted as YYYY-MM-DD-HH
       --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
       --run_length dt       sets simulation length if end_date not specified or run length
@@ -68,12 +74,18 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                             (type: int, default: from drv_in namelist)
       --wall_time WALL_TIME
                             reserved time on compute nodes (default: '24:00:00')
-      --account ACCOUNT     account to use for batch script (default: infered from $ROJECT)
+      --account ACCOUNT     account to use for batch script (default: infered from $PROJECT)
+      --partition PARTITION
+                            select a queue (default: None)
       --gpu_mode GPU_MODE   run COSMO on gpu (type: bool, default: False)
       --modules_opt {switch,purge}
                             Option for loading modules at run time (default: None)
       --pgi_version {16.9.0,17.5.0,17.10.0}
-                            specify pgi compiler version (default: None)
+                            specify pgi compiler version at run time (default: None)
+                            Only effective if modules_opt is either 'switch' or 'purge'
+      --login_shell LOGIN_SHELL
+                            Add the '-l' option to the submit script shebang.
+                            (type: bool, default: True)
       --dummy_day DUMMY_DAY
                             perform a dummy day run after end of simulation to get last COSMO output.
                             (type: bool, default: True)
@@ -102,6 +114,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
       from socket import gethostname
       import shutil
       import time
+      from warnings import warn
 
       # Date formats
       date_fmt_in = '%Y-%m-%d-%H'
@@ -683,7 +696,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           """Create a new Cosmo-CLM2 case"""
 
           if "daint" not in gethostname():
-              raise ValueError("cosmo_clm2 is only implemented for the Piz Daint machine")
+              warn("cosmo_clm2 is only implemented for the Piz Daint machine")
 
           # Parse setup options from command line and xml file
           # ==================================================
