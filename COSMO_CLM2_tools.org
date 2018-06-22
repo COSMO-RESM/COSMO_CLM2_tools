@@ -122,7 +122,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
       date_fmt_cesm = '%Y%m%d'
     #+END_SRC
 
-*** class case
+*** case class
     - [ ] Add option for "user defined" batch script. Not full freedom
       can be given, still need to use cc2_control_case
     #+BEGIN_SRC python
