@@ -124,7 +124,20 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
 *** case class
     - [ ] Add option for "user defined" batch script. Not full freedom
-      can be given, still need to use cc2_control_case
+      can be given, still need to use =cc2_control_case=
+    - [ ] make =case= a base class from which machine specific cases
+      inherit, maybe change name to =base_case=
+      - [ ] =_ntasks_per_node= should be =None= in base class in order
+        to trigger an error if not properly implemented in the
+        subclass
+      - [ ] Options that become daint specific for the constructor:
+        =wall_time=, =account=, =partition=, =login_shell=,
+        =modules_opt= (actually change for =PrgEnv= name),
+        =pgi_version=
+      - [ ] Methods that become machine speficif:
+        - [ ] machine specific attributes setters/getters
+        - [ ] =_build_proc_config=, =_build_controller=,
+          =_update_controller=, =submit=, =run=
     #+BEGIN_SRC python
       class case(object):
           """Class defining a COSMO-CLM2 case"""
