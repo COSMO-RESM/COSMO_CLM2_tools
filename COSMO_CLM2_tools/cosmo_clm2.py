@@ -425,7 +425,7 @@ class base_case(object):
             os.remove(f)
 
         # Run
-        self.run_func()
+        self._run_func()
 
         os.chdir(cwd)
         elapsed = time.time() - start_time
@@ -459,7 +459,7 @@ class daint_case(base_case):
         self.pgi_version = pgi_version
         self.login_shell = login_shell
         self.partition = partition
-        super().__init__(self, **base_case_args)
+        base_case.__init__(self, **base_case_args)
 
 
     def _build_proc_config(self):
@@ -652,8 +652,8 @@ def create_new_case():
           "xml file options must be stored in a subelement of the root element tagged 'cmd_line'.\n"\
           "Command line arguments have precedence over xml file ones."
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
-    parser.add_argument('machine', choices=['daint'], help="machine on which the case is running")
-
+    parser.add_argument('machine', metavar='MACH', choices=['daint'],
+                        help="machine on which the case is running")
     main_group = parser.add_argument_group('main', 'Options common to all machines')
     main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
     main_group.add_argument('--name', help="case name (default: 'COSMO_CLM2')")
@@ -791,7 +791,8 @@ def create_new_case():
     else:
         raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
 
-    cc2case = daint_case(**case_args.update(machine_args))
+    case_args.update(machine_args)
+    cc2case = daint_case(**case_args)
 
     # Change parameters from xml file if required
     # ===========================================
