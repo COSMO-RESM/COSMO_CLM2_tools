@@ -21,14 +21,12 @@ date_fmt_cesm = '%Y%m%d'
 
 # [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*base%20case%20class][base case class:1]]
 class base_case(object):
-
-    """Class defining a COSMO-CLM2 case"""
+    """Base class defining a COSMO-CLM2 case"""
 
     _n_tasks_per_node = None
+    NotImplementMessage = "required method {:s} not implemented by class {:s}.\n" \
+                          "Implement with a single pass statement if irrelevant to this machine."
 
-    # ====
-    # Init
-    # ====
     def __init__(self, name='COSMO_CLM2', path=None,
                  start_date=None, end_date=None, run_length=None,
                  COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
@@ -53,17 +51,13 @@ class base_case(object):
         self._check_gribout()
         self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
         self.write_open_nml()   # Nothing requires changing namelists after that
-        # Create batch scripts
-        if not self.cosmo_only:
-            self._build_proc_config()
+        # Create batch script
         self._build_controller()
         # Create missing directories
         self._create_missing_dirs()
         # Write case to xml file
         self.to_xml('config.xml')
 
-    # Properties
-    # ----------
     @property
     def path(self):
         return self._path
@@ -122,9 +116,6 @@ class base_case(object):
             self._account = acc
 
 
-    # =======
-    # Methods
-    # =======
     def _organize_tasks(self, ncosx, ncosy, ncosio, ncesm):
         # COSMO tasks
         # -----------
@@ -312,28 +303,16 @@ class base_case(object):
             os.makedirs(path)
 
 
-    def _build_proc_config(self):
-        """Place holder for method implemented by machine specific classes.
-Implement with a single pass statement if irrelevant to this machine."""
-
-        raise ValueError("required method not implemented, implement with\n"\
-                         "a single pass statement if irrelevant to this machine.")
-
-
     def _build_controller(self):
-        """Place holder for method implemented by machine specific classes.
-Implement with a single pass statement if irrelevant to this machine."""
+        """Place holder for _build_controller method to be implemented by machine specific classes."""
 
-        raise ValueError("required method not implemented, implement with\n"\
-                         "a single pass statement if irrelevant to this machine.")
+        raise NotImplementedError(NotImplementMessage.format('_build_controller(self)', self.__class__.__name__))
 
 
-    def update_xml_config(self, config_tree):
-        """Place holder for method implemented by machine specific classes.
-Implement with a single pass statement if irrelevant to this machine."""
+    def _update_xml_config(self, config):
+        """Place holder for _update_xml_config method to be implemented by machine specific classes."""
 
-        raise ValueError("required method not implemented, implement with\n"\
-                         "a single pass statement if irrelevant to this machine.")
+        raise NotImplementedError(NotImplementMessage.format('_update_xml_config(self)', self.__class__.__name__))
 
 
     def to_xml(self, file_name):
@@ -366,19 +345,25 @@ Implement with a single pass statement if irrelevant to this machine."""
             ET.SubElement(config, 'CESM_exe').text = self.CESM_exe
         ET.SubElement(config, 'gpu_mode', attrib={'type': 'bool'}).text = '1' if self.gpu_mode else ''
         ET.SubElement(config, 'dummy_day', attrib={'type': 'bool'}).text = '1' if self.dummy_day else ''
-        self.update_xml_config(config)
+        self._update_xml_config(config)
         indent(config)
         tree.write(os.path.join(self.path, file_name), xml_declaration=True)
 
 
-    @classmethod
-    def from_xml(cls, xml_file):
-        """Build a COSMO_CLM2 case from xml file"""
+    @staticmethod
+    def from_xml(xml_file):
+        """Build a case from xml file"""
 
         config = ET.parse(os.path.normpath(xml_file)).getroot()
+        machine_node = config.find('machine')
+        if machine_node is None:
+            raise ValueError("machine node not found in {:s}":format(xml_file))
+        else:
+            machine = machine_node.text
+
         args={}
         for opt in config.iter():
-            if opt is not config:
+            if opt is not config and opt is not machine_node:
                 if opt.get('type') is None:
                     args[opt.tag] = opt.text
                 else:
@@ -389,7 +374,10 @@ Implement with a single pass statement if irrelevant to this machine."""
                         raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
                                          + " is not a valid python type")
 
-        return cls(**args)
+        if machine == 'daint':
+            return daint_case(**args)
+        else:
+            raise NotImplementedError("machine {:s} not implemeted".format(machine))
 
 
     def set_next_run(self):
@@ -414,27 +402,46 @@ Implement with a single pass statement if irrelevant to this machine."""
 
 
     def _update_controller(self):
-        """Place holder for method implemented by machine specific classes.
-Implement with a single pass statement if irrelevant to this machine."""
+        """Place holder for _update_controller method to be implemented by machine specific classes."""
 
-        raise ValueError("required method not implemented, implement with\n"\
-                         "a single pass statement if irrelevant to this machine.")
+        raise NotImplementedError(NotImplementMessage.format('_update_controller(self)', self.__class__.__name__))
 
 
     def submit(self):
-        """Place holder for method implemented by machine specific classes.
-Implement with a single pass statement if irrelevant to this machine."""
-
-        raise ValueError("required method not implemented, implement with\n"\
-                         "a single pass statement if irrelevant to this machine.")
+        cwd = os.getcwd()
+        os.chdir(self.path)
+        self._submit_func()
+        os.chdir(cwd)
 
 
     def run(self):
-        """Place holder for method implemented by machine specific classes.
-Implement with a single pass statement if irrelevant to this machine."""
+        start_time = time.time()
+        cwd = os.getcwd()
 
-        raise ValueError("required method not implemented, implement with\n"\
-                         "a single pass statement if irrelevant to this machine.")
+        # Clean workdir
+        os.chdir(self.path)
+        file_list = glob('YU*') + glob('debug*') + glob('core*') + glob('nout.*') + glob('*.timers_*')
+        for f in file_list:
+            os.remove(f)
+
+        # Run
+        self.run_func()
+
+        os.chdir(cwd)
+        elapsed = time.time() - start_time
+        print("\nCase {name:s} ran in {elapsed:.2f}\n".format(name=self.name, elapsed=elapsed))
+
+
+    def _run_func(self):
+        """Place holder for _run_func method to be implemented by machine specific classes."""
+
+        raise NotImplementedError(NotImplementMessage.format('_run_func(self)', self.__class__.__name__))
+
+
+    def _submit_func(self):
+        """Place holder for _submit_func method to be implemented by machine specific classes."""
+
+        raise NotImplementedError(NotImplementMessage.format('_submit_func(self)', self.__class__.__name__))
 # base case class:1 ends here
 
 # [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*Daint%20case%20class][Daint case class:1]]
@@ -443,9 +450,6 @@ class daint_case(base_case):
 
     _n_tasks_per_node = 12
 
-    # ====
-    # Init
-    # ====
     def __init__(self, **base_case_args,
                  wall_time='24:00:00', account=None, partition=None,
                  login_shell=True,modules_opt=None, pgi_version=None):
@@ -458,9 +462,6 @@ class daint_case(base_case):
         super().__init__(self, **base_case_args)
 
 
-    # =======
-    # Methods
-    # =======
     def _build_proc_config(self):
         with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
             if self.gpu_mode:
@@ -549,23 +550,24 @@ class daint_case(base_case):
             f.truncate()
 
 
-    def submit(self):
-        cwd = os.getcwd()
-        os.chdir(self.path)
+    def _update_xml_config(self, config):
+        ET.SubElement(config, 'machine').text = 'daint'
+        ET.SubElement(config, 'account').text = self.account
+        if self.partition is not None:
+            ET.SubElement(config, 'partition').text = self.partition
+        if self.modules_opt is not None:
+            ET.SubElement(config, 'modules_opt').text = self.modules_opt
+        if self.pgi_version is not None:
+            ET.SubElement(config, 'pgi_version').text = self.pgi_version
+        ET.SubElement(config, 'login_shell', attrib={'type': 'bool'}).text = '1' if self.login_shell else ''
+
+
+    def _submit_func(self):
         check_call(['sbatch', 'controller', './config.xml'])
-        os.chdir(cwd)
 
 
-    def run(self):
-        cwd = os.getcwd()
-        # Clean workdir
-        os.chdir(self.path)
-        file_list = glob('YU*') + glob('debug*') + glob('core*')  + glob('nout.*') + glob('*.timers_*')
-        for f in file_list:
-            os.remove(f)
-        # Run
+    def _run_func(self):
         check_call(['module list'], shell=True)
-        start_time = time.time()
         if self.cosmo_only:
             if self.gpu_mode:
                 run_cmd = 'srun -u --ntasks-per-node=1 -n {:d} {:s}'.format(self._n_nodes, self.COSMO_exe)
@@ -574,12 +576,10 @@ class daint_case(base_case):
                 run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.COSMO_exe)
                 # check_call(['srun', '-u', '-n', str(self._n_nodes * self._n_tasks_per_node), self.COSMO_exe])
         else:
+            self._build_proc_config()
             run_cmd = 'srun -u --multi-prog ./proc_config'
         print("running " + run_cmd)
         check_call(run_cmd, shell=True)
-        elapsed = time.time() - start_time
-        print("\nCase {name:s} ran in {elapsed:.2f}\n".format(name=self.name, elapsed=elapsed))
-        os.chdir(cwd)
 # Daint case class:1 ends here
 
 # [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*class%20nmldict][class nmldict:1]]
@@ -635,10 +635,11 @@ def add_time_from_str(date1, dt_str):
 
 # [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*create_new_case][create_new_case:1]]
 def create_new_case():
-    """Create a new Cosmo-CLM2 case"""
+    """
+    Create a new Cosmo-CLM2 case from cmd line arguments and xml setup file
 
-    if "daint" not in gethostname():
-        warn("cosmo_clm2 is only implemented for the Piz Daint machine")
+    See ``cc2_create_case --help``
+    """
 
     # Parse setup options from command line and xml file
     # ==================================================
@@ -651,60 +652,66 @@ def create_new_case():
           "xml file options must be stored in a subelement of the root element tagged 'cmd_line'.\n"\
           "Command line arguments have precedence over xml file ones."
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
-    parser.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
-    parser.add_argument('--name', help="case name (default: 'COSMO_CLM2')")
-    parser.add_argument('--path', help="directory where the case is set up (default: $SCRATCH/NAME)")
-    parser.add_argument('--cosmo_only', help="Run only cosmo with build-in soil model TERRA (default: False)\n"\
-                        "Be carefull to provide a COSMO executable compiled accordingly")
-    parser.add_argument('--start_date', metavar='DATE_1',
-                        help="simulation start date formatted as YYYY-MM-DD-HH")
-    parser.add_argument('--end_date', metavar='DATE_2',
-                        help="simulation end date formatted as YYYY-MM-DD-HH")
-    parser.add_argument('--run_length', metavar='dt',
-                        help="sets simulation length if end_date not specified or run length\n"\
-                        "between restarts otherwise\n"\
-                        "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'\n"\
-                        "N1, N2 and N3 being arbitrary integers (N2>12 possible) and\n"\
-                        "'y', 'm' and 'd' stand for year, month and day")
-    parser.add_argument('--cos_in', help="COSMO input files directory (default: './COSMO_input')")
-    parser.add_argument('--cos_nml', help="COSMO namelists directory (default: './COSMO_nml')")
-    parser.add_argument('--cos_exe', help="path to COSMO executable (default: './cosmo')")
-    parser.add_argument('--cesm_in', help="CESM input files directory (default: './CESM_input')")
-    parser.add_argument('--cesm_nml', help="CESM namelists directory (default: './CESM_nml')")
-    parser.add_argument('--cesm_exe', help="CESM executable (default: './cesm.exe')")
-    parser.add_argument('--oas_in', help="OASIS input files directory (default: './OASIS_input')")
-    parser.add_argument('--oas_nml', help="OASIS namelists directory (default: './OASIS_nml')")
-    parser.add_argument('--ncosx', type=int, help="number of subdomains along the 'x-axis'\n"\
-                        "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
-    parser.add_argument('--ncosy', type=int, help="number of subdomains along the 'y-axis'\n"\
-                        "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
-    parser.add_argument('--ncosio', type=int, help="number of cores dedicated to i/o work'\n"\
-                        "(type: int, default: from INPUT_ORG namelist)")
-    parser.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
-                        "(type: int, default: from drv_in namelist)")
-    parser.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
-    parser.add_argument('--account', help="account to use for batch script (default: infered from $PROJECT)")
-    parser.add_argument('--partition', help="select a queue (default: None)")
-    parser.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
-    parser.add_argument('--modules_opt', choices=['switch', 'purge'],
-                        help="Option for loading modules at run time (default: None)")
-    parser.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0'],
-                        help="specify pgi compiler version at run time (default: None)\n"\
-                        "Only effective if modules_opt is either 'switch' or 'purge'")
-    parser.add_argument('--login_shell', type=bool,
-                        help="Add the '-l' option to the submit script shebang.\n"\
-                        "(type: bool, default: True)")
-    parser.add_argument('--dummy_day', type=bool,
-                        help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
-                        "(type: bool, default: True)")
-    parser.add_argument('--no_submit', action='store_false', dest='submit',
-                        help="do not submit job after setup\n"\
-                        "only command line argument, cannot be set in xml file")
-    parser.add_argument('--gen_oasis', action='store_true',
-                        help="generate OASIS auxiliary files\n"\
-                        "note that OASIS will crash after producing the files\n"\
-                        "only command line argument, cannot be set in xml file\n"
-                        )
+    parser.add_argument('machine', choices=['daint'], help="machine on which the case is running")
+
+    main_group = parser.add_argument_group('main', 'Options common to all machines')
+    main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
+    main_group.add_argument('--name', help="case name (default: 'COSMO_CLM2')")
+    main_group.add_argument('--path', help="directory where the case is set up (default: $SCRATCH/NAME on daint)")
+    main_group.add_argument('--cosmo_only', help="run only cosmo with build-in soil model TERRA (default: False)\n"\
+                            "Be carefull to provide a COSMO executable compiled accordingly")
+    main_group.add_argument('--start_date', metavar='DATE_1',
+                            help="simulation start date formatted as YYYY-MM-DD-HH")
+    main_group.add_argument('--end_date', metavar='DATE_2',
+                            help="simulation end date formatted as YYYY-MM-DD-HH")
+    main_group.add_argument('--run_length', metavar='dt',
+                            help="sets simulation length if end_date not specified or run length\n"\
+                            "between restarts otherwise\n"\
+                            "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'\n"\
+                            "N1, N2 and N3 being arbitrary integers (N2>12 possible) and\n"\
+                            "'y', 'm' and 'd' stand for year, month and day")
+    main_group.add_argument('--cos_in', help="COSMO input files directory (default: './COSMO_input')")
+    main_group.add_argument('--cos_nml', help="COSMO namelists directory (default: './COSMO_nml')")
+    main_group.add_argument('--cos_exe', help="path to COSMO executable (default: './cosmo')")
+    main_group.add_argument('--cesm_in', help="CESM input files directory (default: './CESM_input')")
+    main_group.add_argument('--cesm_nml', help="CESM namelists directory (default: './CESM_nml')")
+    main_group.add_argument('--cesm_exe', help="CESM executable (default: './cesm.exe')")
+    main_group.add_argument('--oas_in', help="OASIS input files directory (default: './OASIS_input')")
+    main_group.add_argument('--oas_nml', help="OASIS namelists directory (default: './OASIS_nml')")
+    main_group.add_argument('--ncosx', type=int, help="number of subdomains along the 'x-axis'\n"\
+                            "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
+    main_group.add_argument('--ncosy', type=int, help="number of subdomains along the 'y-axis'\n"\
+                            "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
+    main_group.add_argument('--ncosio', type=int, help="number of cores dedicated to i/o work'\n"\
+                            "(type: int, default: from INPUT_ORG namelist)")
+    main_group.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
+                            "(type: int, default: from drv_in namelist)")
+    main_group.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
+    main_group.add_argument('--dummy_day', type=bool,
+                            help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
+                            "(type: bool, default: True)")
+
+    daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
+    daint_group.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
+    daint_group.add_argument('--account', help="account to use for batch script (default: infered from $PROJECT)")
+    daint_group.add_argument('--partition', help="select a queue (default: None)")
+    daint_group.add_argument('--modules_opt', choices=['switch', 'purge'],
+                             help="Option for loading modules at run time (default: None)")
+    daint_group.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0'],
+                             help="specify pgi compiler version at run time (default: None)\n"\
+                             "Only effective if modules_opt is either 'switch' or 'purge'")
+    daint_group.add_argument('--login_shell', type=bool,
+                             help="Add the '-l' option to the submit script shebang.\n"\
+                             "(type: bool, default: True)")
+
+    cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
+    cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
+                                help="do not submit job after setup\n"\
+                                "only command line argument, cannot be set in xml file")
+    cmd_line_group.add_argument('--gen_oasis', action='store_true',
+                                help="generate OASIS auxiliary files\n"\
+                                "note that OASIS will crash after producing the files\n"\
+                                "only command line argument, cannot be set in xml file\n")
 
     opts = parser.parse_args()
     if opts.gen_oasis:
@@ -712,15 +719,17 @@ def create_new_case():
 
     # Set options to xml value if needed or default if nothing provided
     # -----------------------------------------------------------------
+    # Common options defaults
     defaults = {'name': 'COSMO_CLM2', 'path': None, 'cosmo_only': False,
                 'start_date': None, 'end_date': None, 'run_length': None,
                 'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
                 'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
                 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
-                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
-                'wall_time': '24:00:00', 'account': None, 'partition': None,
-                'dummy_day': True, 'gpu_mode': False,
-                'modules_opt': None, 'pgi_version': None, 'login_shell': True}
+                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None
+                'dummy_day': True, 'gpu_mode': False}
+    # daint options defaults
+    defaults.update({'wall_time': '24:00:00', 'account': None, 'partition': None,
+                     'modules_opt': None, 'pgi_version': None, 'login_shell': True})
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
         xml_node = tree.getroot().find('cmd_line')
@@ -729,13 +738,15 @@ def create_new_case():
     apply_defaults(opts, xml_node, defaults)
 
     if opts.path is None:
-        opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
+        if opts.machine == 'daint':
+            opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
+        else:
+            raise NotImplementedError("default path not implemented for machine {:s}".format(opts.machine))
 
     # Log
     # ===
     log = 'Setting up case {:s} in {:s}'.format(opts.name, opts.path)
-    under = '-' * len(log)
-    print(log + '\n' + under)
+    print(log + '\n' + '-' * len(log))
 
     # Transfer data
     # =============
@@ -767,18 +778,20 @@ def create_new_case():
 
     # Create case instance
     # ====================
-    cc2case = case(name=opts.name, path=opts.path, cosmo_only=opts.cosmo_only,
-                   start_date=opts.start_date, end_date=opts.end_date,
-                   run_length=opts.run_length,
-                   COSMO_exe=os.path.basename(opts.cos_exe),
-                   CESM_exe=os.path.basename(opts.cesm_exe),
-                   wall_time=opts.wall_time, account=opts.account,
-                   partition=opts.partition,
-                   ncosx=opts.ncosx, ncosy=opts.ncosy, ncosio=opts.ncosio, ncesm=opts.ncesm,
-                   gpu_mode=opts.gpu_mode,
-                   modules_opt=opts.modules_opt, pgi_version=opts.pgi_version,
-                   login_shell=opts.login_shell,
-                   dummy_day=opts.dummy_day)
+    case_args = {'name': opts.name, 'path': opts.path, 'cosmo_only': opts.cosmo_only,
+                 'start_date': opts.start_date, 'end_date': opts.end_date,
+                 'run_length': opts.run_length, 'COSMO_exe': os.path.basename(opts.cos_exe),
+                 'CESM_exe': os.path.basename(opts.cesm_exe), 'ncosx': opts.ncosx,
+                 'ncosy': opts.ncosy, 'ncosio': opts.ncosio, 'ncesm': opts.ncesm,
+                 'gpu_mode': opts.gpu_mode, 'dummy_day': opts.dummy_day}
+    if opts.machine == 'daint':
+        machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
+                        'partition': opts.partition,'modules_opt': opts.modules_opt,
+                        'pgi_version': opts.pgi_version, 'login_shell': opts.login_shell}
+    else:
+        raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
+
+    cc2case = daint_case(**case_args.update(machine_args))
 
     # Change parameters from xml file if required
     # ===========================================
@@ -935,7 +948,7 @@ def control_case():
     # Read case configuration from xml file
     path, xml_file = os.path.split(cfg.xml_path)
     os.chdir(path)
-    cc2case = case_from_xml(xml_file)
+    cc2case = base_case.from_xml(xml_file)
 
     # Run
     cc2case.run()
