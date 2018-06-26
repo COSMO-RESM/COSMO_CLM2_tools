@@ -357,7 +357,7 @@ class base_case(object):
         config = ET.parse(os.path.normpath(xml_file)).getroot()
         machine_node = config.find('machine')
         if machine_node is None:
-            raise ValueError("machine node not found in {:s}":format(xml_file))
+            raise ValueError("machine node not found in {:s}".format(xml_file))
         else:
             machine = machine_node.text
 
@@ -450,9 +450,9 @@ class daint_case(base_case):
 
     _n_tasks_per_node = 12
 
-    def __init__(self, **base_case_args,
-                 wall_time='24:00:00', account=None, partition=None,
-                 login_shell=True,modules_opt=None, pgi_version=None):
+    def __init__(self, wall_time='24:00:00', account=None, partition=None,
+                 login_shell=True, modules_opt=None, pgi_version=None,
+                 **base_case_args):
         self.wall_time = wall_time
         self.account = account
         self.modules_opt = modules_opt
@@ -725,7 +725,7 @@ def create_new_case():
                 'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
                 'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
                 'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
-                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None
+                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
                 'dummy_day': True, 'gpu_mode': False}
     # daint options defaults
     defaults.update({'wall_time': '24:00:00', 'account': None, 'partition': None,
