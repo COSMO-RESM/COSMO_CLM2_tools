@@ -646,6 +646,13 @@ def create_new_case():
 
     # Options from command line
     # -------------------------
+    def str_to_bool(val_str):
+        assert type(val_str) is str
+        if len(val_str) == 0:
+            return False
+        return bool(eval(val_str))
+
+
     dsc = "Set up and run a COSMO_CLM2 case\n"\
           "--------------------------------\n"\
           "Options can be set up either by xml file or the following command line arguments.\n"\
@@ -686,10 +693,11 @@ def create_new_case():
                             "(type: int, default: from INPUT_ORG namelist)")
     main_group.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
                             "(type: int, default: from drv_in namelist)")
-    main_group.add_argument('--gpu_mode', type=bool, help="run COSMO on gpu (type: bool, default: False)")
-    main_group.add_argument('--dummy_day', type=bool,
+    main_group.add_argument('--gpu_mode', type=str_to_bool,
+                            help="run COSMO on gpu (type: bool, parse as boolean like Python)")
+    main_group.add_argument('--dummy_day', type=str_to_bool,
                             help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
-                            "(type: bool, default: True)")
+                            "(type: bool, parse as boolean like Python)")
 
     daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
     daint_group.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
@@ -700,9 +708,10 @@ def create_new_case():
     daint_group.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0'],
                              help="specify pgi compiler version at run time (default: None)\n"\
                              "Only effective if modules_opt is either 'switch' or 'purge'")
-    daint_group.add_argument('--login_shell', type=bool,
+    daint_group.add_argument('--login_shell', type=str_to_bool,
                              help="Add the '-l' option to the submit script shebang.\n"\
-                             "(type: bool, default: True)")
+                             "(type: bool, parse as boolean like Python)")
+
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
