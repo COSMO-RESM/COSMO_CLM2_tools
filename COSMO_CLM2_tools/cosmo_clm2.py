@@ -647,9 +647,6 @@ def create_new_case():
     # Options from command line
     # -------------------------
     def str_to_bool(val_str):
-        assert type(val_str) is str
-        if len(val_str) == 0:
-            return False
         return bool(eval(val_str))
 
 
@@ -694,10 +691,10 @@ def create_new_case():
     main_group.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
                             "(type: int, default: from drv_in namelist)")
     main_group.add_argument('--gpu_mode', type=str_to_bool,
-                            help="run COSMO on gpu (type: bool, parse as boolean like Python)")
+                            help="run COSMO on gpu (type: bool, using anything Python can parse as a boolean)")
     main_group.add_argument('--dummy_day', type=str_to_bool,
                             help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
-                            "(type: bool, parse as boolean like Python)")
+                            "(type: bool, using anything Python can parse as a boolean)")
 
     daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
     daint_group.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
@@ -710,7 +707,7 @@ def create_new_case():
                              "Only effective if modules_opt is either 'switch' or 'purge'")
     daint_group.add_argument('--login_shell', type=str_to_bool,
                              help="Add the '-l' option to the submit script shebang.\n"\
-                             "(type: bool, parse as boolean like Python)")
+                             "(type: bool, using anything Python can parse as a boolean)")
 
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
