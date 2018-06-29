@@ -1,4 +1,3 @@
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*preamble][preamble:1]]
 from __future__ import print_function
 from subprocess import check_call
 from argparse import ArgumentParser, RawTextHelpFormatter
@@ -17,15 +16,14 @@ from warnings import warn
 date_fmt_in = '%Y-%m-%d-%H'
 date_fmt_cosmo = '%Y%m%d%H'
 date_fmt_cesm = '%Y%m%d'
-# preamble:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*base%20case%20class][base case class:1]]
 class base_case(object):
     """Base class defining a COSMO-CLM2 case"""
 
     _n_tasks_per_node = None
     NotImplementMessage = "required method {:s} not implemented by class {:s}.\n" \
                           "Implement with a single pass statement if irrelevant to this machine."
+
 
     def __init__(self, name='COSMO_CLM2', path=None,
                  start_date=None, end_date=None, run_length=None,
@@ -55,8 +53,6 @@ class base_case(object):
         self._build_controller()
         # Create missing directories
         self._create_missing_dirs()
-        # Write case to xml file
-        self.to_xml('config.xml')
 
     @property
     def path(self):
@@ -315,7 +311,7 @@ class base_case(object):
         raise NotImplementedError(NotImplementMessage.format('_update_xml_config(self)', self.__class__.__name__))
 
 
-    def to_xml(self, file_name):
+    def to_xml(self, file_name='config.xml'):
 
         def indent(elem, level=0):
             i = "\n" + level*"  "
@@ -442,9 +438,7 @@ class base_case(object):
         """Place holder for _submit_func method to be implemented by machine specific classes."""
 
         raise NotImplementedError(NotImplementMessage.format('_submit_func(self)', self.__class__.__name__))
-# base case class:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*Daint%20case%20class][Daint case class:1]]
 class daint_case(base_case):
     """Class defining a COSMO-CLM2 case on Piz Daint"""
 
@@ -580,9 +574,7 @@ class daint_case(base_case):
             run_cmd = 'srun -u --multi-prog ./proc_config'
         print("running " + run_cmd)
         check_call(run_cmd, shell=True)
-# Daint case class:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*class%20nmldict][class nmldict:1]]
 class nmldict(dict):
     """Dictionnary of all the namelists of a case. Only load tha namelist if needed"""
     def __init__(self, cc2case):
@@ -600,9 +592,7 @@ class nmldict(dict):
     def write_all(self):
         for name, nml in self.items():
             self.write(name)
-# class nmldict:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*add_time_from_str][add_time_from_str:1]]
 def add_time_from_str(date1, dt_str):
     """Increment date from a string
 
@@ -631,9 +621,7 @@ def add_time_from_str(date1, dt_str):
         y2 += ny + (nm+m2-1) // 12
         m2 = (nm+m2-1) % 12 + 1
         return datetime(y2, m2, d2, h2)
-# add_time_from_str:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*create_new_case][create_new_case:1]]
 def create_new_case():
     """
     Create a new Cosmo-CLM2 case from cmd line arguments and xml setup file
@@ -656,7 +644,7 @@ def create_new_case():
           "xml file options must be stored in a subelement of the root element tagged 'cmd_line'.\n"\
           "Command line arguments have precedence over xml file ones."
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
-    parser.add_argument('machine', metavar='MACH', choices=['daint'],
+    parser.add_argument('--machine', metavar='MACH', choices=['daint'], required=True,
                         help="machine on which the case is running")
     main_group = parser.add_argument_group('main', 'Options common to all machines')
     main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
@@ -708,7 +696,6 @@ def create_new_case():
     daint_group.add_argument('--login_shell', type=str_to_bool,
                              help="Add the '-l' option to the submit script shebang.\n"\
                              "(type: bool, using anything Python can parse as a boolean)")
-
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
@@ -791,6 +778,7 @@ def create_new_case():
                  'ncosy': opts.ncosy, 'ncosio': opts.ncosio, 'ncesm': opts.ncesm,
                  'gpu_mode': opts.gpu_mode, 'dummy_day': opts.dummy_day}
     if opts.machine == 'daint':
+        case_class = daint_case
         machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
                         'partition': opts.partition,'modules_opt': opts.modules_opt,
                         'pgi_version': opts.pgi_version, 'login_shell': opts.login_shell}
@@ -798,7 +786,7 @@ def create_new_case():
         raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
 
     case_args.update(machine_args)
-    cc2case = daint_case(**case_args)
+    cc2case = case_class(**case_args)
 
     # Change parameters from xml file if required
     # ===========================================
@@ -842,15 +830,13 @@ def create_new_case():
     # Finalize
     # ========
     cc2case.write_open_nml()
-    cc2case.to_xml('config.xml')
+    cc2case.to_xml(file_name='config.xml')
 
     # Submit case
     # ===========
     if opts.submit:
         cc2case.submit()
-# create_new_case:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*apply_defaults][apply_defaults:1]]
 def apply_defaults(opts, xml_node, defaults):
     """Set options with opts > xml_file > defaults"""
     for opt, default  in defaults.items():
@@ -877,9 +863,7 @@ def apply_defaults(opts, xml_node, defaults):
                                              + " is not a valid python type")
         if apply_def:
             setattr(opts, opt, default)
-# apply_defaults:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*transfer_COSMO_input][transfer_COSMO_input:1]]
 def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
                          run_length, dh, dummy_day, ext):
 
@@ -942,9 +926,7 @@ def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
 
     if os.path.exists('transfer_list'):
         os.remove('transfer_list')
-# transfer_COSMO_input:1 ends here
 
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*control_case][control_case:1]]
 def control_case():
     # Parse arguments
     dsc = "Control a COSMO_CLM2 case"
@@ -963,4 +945,3 @@ def control_case():
     # Submit next run
     if cc2case.set_next_run():
         cc2case.submit()
-# control_case:1 ends here

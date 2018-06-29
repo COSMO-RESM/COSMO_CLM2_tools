@@ -1,4 +1,3 @@
-# [[file:~/Projects/COSMO_CLM2_tools/COSMO_CLM2_tools.org::*setup.py][setup.py:1]]
 import os
 from setuptools import setup
 # try:
@@ -17,4 +16,3 @@ setup(name='COSMO_CLM2_tools',
                                         'cc2_control_case = COSMO_CLM2_tools.cosmo_clm2:control_case']},
       install_requires=['f90nml>=1.0.2']
 )
-# setup.py:1 ends here

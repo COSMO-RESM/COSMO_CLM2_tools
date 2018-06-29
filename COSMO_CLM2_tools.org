@@ -99,7 +99,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
   - [ ] Add doc strings
 ** cosmo_clm2.py
    :PROPERTIES:
-   :header-args: :tangle COSMO_CLM2_tools/cosmo_clm2.py :comments link
+   :header-args: :tangle COSMO_CLM2_tools/cosmo_clm2.py :comments no
    :END:
 *** preamble
     #+BEGIN_SRC python
@@ -149,6 +149,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           NotImplementMessage = "required method {:s} not implemented by class {:s}.\n" \
                                 "Implement with a single pass statement if irrelevant to this machine."
 
+
           def __init__(self, name='COSMO_CLM2', path=None,
                        start_date=None, end_date=None, run_length=None,
                        COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
@@ -177,8 +178,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               self._build_controller()
               # Create missing directories
               self._create_missing_dirs()
-              # Write case to xml file
-              self.to_xml('config.xml')
 
           @property
           def path(self):
@@ -437,7 +436,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               raise NotImplementedError(NotImplementMessage.format('_update_xml_config(self)', self.__class__.__name__))
 
 
-          def to_xml(self, file_name):
+          def to_xml(self, file_name='config.xml'):
 
               def indent(elem, level=0):
                   i = "\n" + level*"  "
@@ -482,7 +481,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   raise ValueError("machine node not found in {:s}".format(xml_file))
               else:
                   machine = machine_node.text
-        
+
               args={}
               for opt in config.iter():
                   if opt is not config and opt is not machine_node:
@@ -495,7 +494,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                           else:
                               raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
                                                + " is not a valid python type")
-            
+
               if machine == 'daint':
                   return daint_case(**args)
               else:
@@ -759,6 +758,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
      #+END_SRC
 
 *** create_new_case
+    - [ ] Put this function in a separate module
     #+BEGIN_SRC python
       def create_new_case():
           """
@@ -774,15 +774,15 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           # -------------------------
           def str_to_bool(val_str):
               return bool(eval(val_str))
-            
-        
+
+
           dsc = "Set up and run a COSMO_CLM2 case\n"\
                 "--------------------------------\n"\
                 "Options can be set up either by xml file or the following command line arguments.\n"\
                 "xml file options must be stored in a subelement of the root element tagged 'cmd_line'.\n"\
                 "Command line arguments have precedence over xml file ones."
           parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
-          parser.add_argument('machine', metavar='MACH', choices=['daint'],
+          parser.add_argument('--machine', metavar='MACH', choices=['daint'], required=True,
                               help="machine on which the case is running")
           main_group = parser.add_argument_group('main', 'Options common to all machines')
           main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
@@ -834,7 +834,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           daint_group.add_argument('--login_shell', type=str_to_bool,
                                    help="Add the '-l' option to the submit script shebang.\n"\
                                    "(type: bool, using anything Python can parse as a boolean)")
-
 
           cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
           cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
@@ -917,6 +916,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                        'ncosy': opts.ncosy, 'ncosio': opts.ncosio, 'ncesm': opts.ncesm,
                        'gpu_mode': opts.gpu_mode, 'dummy_day': opts.dummy_day}
           if opts.machine == 'daint':
+              case_class = daint_case
               machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
                               'partition': opts.partition,'modules_opt': opts.modules_opt,
                               'pgi_version': opts.pgi_version, 'login_shell': opts.login_shell}
@@ -924,7 +924,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
 
           case_args.update(machine_args)
-          cc2case = daint_case(**case_args)
+          cc2case = case_class(**case_args)
 
           # Change parameters from xml file if required
           # ===========================================
@@ -968,7 +968,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           # Finalize
           # ========
           cc2case.write_open_nml()
-          cc2case.to_xml('config.xml')
+          cc2case.to_xml(file_name='config.xml')
 
           # Submit case
           # ===========
@@ -1073,7 +1073,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
     #+END_SRC
 
 *** control_case
-    - [ ] make this machine also specific.
+    - [ ] Put this function in a separate module with =create_new_case=
     #+BEGIN_SRC python
       def control_case():
           # Parse arguments
@@ -1096,12 +1096,12 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
     #+END_SRC
 
 ** __init__.py
-   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/__init__.py :comments link
+   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/__init__.py :comments no
    
    #+END_SRC
 
 * setup.py                                                         :noexport:
-  #+BEGIN_SRC python :tangle setup.py :comments link
+  #+BEGIN_SRC python :tangle setup.py :comments no
     import os
     from setuptools import setup
     # try:
