@@ -817,8 +817,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
           main_group.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
                                   "(type: int, default: from drv_in namelist)")
           main_group.add_argument('--gpu_mode', type=str_to_bool,
-                                  help="run COSMO on gpu (type: bool, using anything Python can parse as a boolean,\n
-                                  default: False)")
+                                  help="run COSMO on gpu (type: bool, using anything Python can parse as a boolean,\n"\
+                                  "default: False)")
           main_group.add_argument('--dummy_day', type=str_to_bool,
                                   help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                                   "(type: bool, using anything Python can parse as a boolean, default: True)")
@@ -834,8 +834,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                                    "Only effective if modules_opt is either 'switch' or 'purge'")
           daint_group.add_argument('--login_shell', type=str_to_bool,
                                    help="Add the '-l' option to the submit script shebang.\n"\
-                                   "(type: bool, using anything Python can parse as a boolean,\n
-                                   default: True)")
+                                   "(type: bool, using anything Python can parse as a boolean,\n"\
+                                   "default: True)")
 
           cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
           cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
