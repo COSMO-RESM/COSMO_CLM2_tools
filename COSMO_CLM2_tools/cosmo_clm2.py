@@ -445,7 +445,7 @@ class daint_case(base_case):
     _n_tasks_per_node = 12
 
     def __init__(self, wall_time='24:00:00', account=None, partition=None,
-                 login_shell=True, modules_opt=None, pgi_version=None,
+                 login_shell=True, modules_opt='switch', pgi_version=None,
                  **base_case_args):
         self.wall_time = wall_time
         self.account = account
@@ -476,10 +476,14 @@ class daint_case(base_case):
                                               self._run_start_date.strftime(date_fmt_cesm),
                                               self._run_end_date.strftime(date_fmt_cesm))
         with open(os.path.join(self.path, 'controller'), mode='w') as script:
-            if self.login_shell:
-                script.write('#!/bin/bash -l\n')
-            else:
-                script.write('#!/bin/bash\n')
+            # shebang
+            # if self.login_shell:
+            #     script.write('#!/bin/bash -l\n')
+            # else:
+            #     script.write('#!/bin/bash\n')
+            script.write('#!/usr/bin/env bash\n')
+
+            # slurm options
             script.write('#SBATCH --constraint=gpu\n')
             script.write('#SBATCH --job-name={:s}\n'.format(self.name))
             script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
@@ -487,29 +491,12 @@ class daint_case(base_case):
             script.write('#SBATCH --error={:s}\n'.format(logfile))
             script.write('#SBATCH --account={:s}\n'.format(self.account))
             script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
-            if self.gpu_mode:
-                script.write('#SBATCH --gres=gpu:1\n')
+            script.write('#SBATCH --gres=gpu:1\n')
             if self.partition is not None:
                 script.write('#SBATCH --partition={:s}\n'.format(self.partition))
             script.write('\n')
-            script.write('module list\n')
-            if self.modules_opt:
-                if self.modules_opt == 'purge':
-                    script.write('module purge\n')
-                    script.write('module load PrgEnv-pgi\n')
-                elif self.modules_opt == 'switch':
-                    script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
-                if self.pgi_version == '16.9.0':
-                    script.write('module unload pgi\n')
-                    script.write('module load pgi/16.9.0\n')
-                elif self.pgi_version == '17.10.0':
-                    script.write('module unload pgi\n')
-                    script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
-                    script.write('module load pgi/17.10\n')
-                    script.write('export PGI_VERS_STR=17.10.0\n')
-                script.write('module load cray-netcdf\n')
-            script.write('module list\n')
-            script.write('\n')
+
+            # environment variables
             script.write('export MALLOC_MMAP_MAX_=0\n')
             script.write('export MALLOC_TRIM_THRESHOLD_=536870912\n')
             script.write('\n')
@@ -525,7 +512,44 @@ class daint_case(base_case):
                 script.write('export MV2_USE_CUDA=1\n')
                 script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
                 script.write('export MPICH_G2G_PIPELINE=256\n')
+            script.write('\n')
+
+            # Modules
+            if self.modules_opt != 'none':
+                # pgi programing environment
+                if self.modules_opt == 'purge':
+                    script.write('module purge\n')
+                    script.write('module load PrgEnv-pgi\n')
+                elif self.modules_opt == 'switch':
+                    script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
+                # pgi version
+                if self.pgi_version is not None:
+                    if self.pgi_version == '16.9.0':
+                        script.write('module unload pgi\n')
+                        script.write('module load pgi/16.9.0\n')
+                    elif self.pgi_version == '17.5.0':
+                        script.write('module unload pgi\n')
+                        script.write('module load pgi/17.5.0\n')
+                    elif self.pgi_version == '17.10.0':
+                        script.write('module unload pgi\n')
+                        script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
+                        script.write('module load pgi/17.10\n')
+                        script.write('export PGI_VERS_STR=17.10.0\n')
+                    else:
+                        raise ValueError("valid pgi versions are '16.9.0', '17.5.0' or '17.10.0'")
+
+                # other modules
+                script.write('module load daint-gpu\n')
+                script.write('module load cray-netcdf\n')
+                if self.gpu_mode:
+                    script.write('module load craype-accel-nvidia60\n')    
                 script.write('\n')
+
+            # Check loaded modules
+            script.write('module list\n')
+            script.write('\n')
+
+            # launch case
             script.write('cc2_control_case ./config.xml\n')
 
 
@@ -689,13 +713,12 @@ def create_new_case():
     daint_group.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
     daint_group.add_argument('--account', help="account to use for batch script (default: infered from $PROJECT)")
     daint_group.add_argument('--partition', help="select a queue (default: None)")
-    daint_group.add_argument('--modules_opt', choices=['switch', 'purge'],
-                             help="Option for loading modules at run time (default: None)")
+    daint_group.add_argument('--modules_opt', choices=['switch', 'none', 'purge'],
+                             help="Option for loading modules at run time (default: 'switch')")
     daint_group.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0'],
-                             help="specify pgi compiler version at run time (default: None)\n"\
-                             "Only effective if modules_opt is either 'switch' or 'purge'")
+                             help="specify pgi compiler version at run time (default: None)")
     daint_group.add_argument('--login_shell', type=str_to_bool,
-                             help="Add the '-l' option to the submit script shebang.\n"\
+                             help="DEACTIVATED\nAdd the '-l' option to the submit script shebang.\n"\
                              "(type: bool, using anything Python can parse as a boolean,\n"\
                              "default: True)")
 
@@ -724,7 +747,7 @@ def create_new_case():
                 'dummy_day': True, 'gpu_mode': False}
     # daint options defaults
     defaults.update({'wall_time': '24:00:00', 'account': None, 'partition': None,
-                     'modules_opt': None, 'pgi_version': None, 'login_shell': True})
+                     'modules_opt': 'switch', 'pgi_version': None, 'login_shell': True})
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
         xml_node = tree.getroot().find('cmd_line')
