@@ -1,4 +1,4 @@
-# Created 2018-10-01 Mon 17:41
+# Created 2018-10-01 Mon 17:58
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
 #+EXPORT_FILE_NAME: README
@@ -38,7 +38,8 @@ the cc2_create_case command. This is the result of =cc2_create_case
   Set up and run a COSMO_CLM2 case
   --------------------------------
   Options can be set up either by xml file or the following command line arguments.
-  xml file options must be stored in a subelement of the root element tagged 'cmd_line'.
+  xml file options must be stored in a subelement of the root element tagged with 'main'.
+  and/or the specific machine (see https://github.com/COSMO-RESM/COSMO_CLM2_tools/blob/master/COSMO_CLM2_tools/default_setup.xml)
   Command line arguments have precedence over xml file ones.
   
   optional arguments:

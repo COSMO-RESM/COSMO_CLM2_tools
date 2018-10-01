@@ -665,7 +665,8 @@ def create_new_case():
     dsc = "Set up and run a COSMO_CLM2 case\n"\
           "--------------------------------\n"\
           "Options can be set up either by xml file or the following command line arguments.\n"\
-          "xml file options must be stored in a subelement of the root element tagged 'cmd_line'.\n"\
+          "xml file options must be stored in a subelement of the root element tagged with 'main'.\n"\
+          "and/or the specific machine (see https://github.com/COSMO-RESM/COSMO_CLM2_tools/blob/master/COSMO_CLM2_tools/default_setup.xml)\n"\
           "Command line arguments have precedence over xml file ones."
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
     main_group = parser.add_argument_group('main', 'Options common to all machines')
