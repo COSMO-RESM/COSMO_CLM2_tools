@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <setup>
-  <cmd_line>
-    <!-- Options that can also be set through the command line.
-         Command line takes precedence -->
+  <!-- main and machine specific options can also be set through the command line.
+       Command line takes precedence -->
+  <main>
     <name>COSMO_CLM2</name>
     <path></path>
     <cosmo_only></cosmo_only>
@@ -23,13 +23,15 @@
     <ncesm type="int"></ncesm>
     <gpu_mode type="py_eval">False</gpu_mode>
     <dummy_day type="py_eval">True</dummy_day>
+  </main>
+  <daint>
     <wall_time>24:00:00</wall_time>
     <account></account>
     <partition></partition>
     <modules_opt>switch</modules_opt>
     <pgi_version></pgi_version>
     <login_shell type="py_eval">True</login_shell>
-  </cmd_line>
+  </daint>
   <!-- Any namelist parameter can be changed by adding a <change_par> node directly under the <setup> node
        with attributes following this example
        <change_par file="INPUT_ORG" block="runctl" param="lreproduce" type="py_eval">True</change_par>

@@ -668,9 +668,10 @@ def create_new_case():
           "xml file options must be stored in a subelement of the root element tagged 'cmd_line'.\n"\
           "Command line arguments have precedence over xml file ones."
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
-    parser.add_argument('--machine', metavar='MACH', choices=['daint'], required=True,
-                        help="machine on which the case is running")
     main_group = parser.add_argument_group('main', 'Options common to all machines')
+    main_group.add_argument('--machine', metavar='MACH', choices=['daint'],
+                            help="machine on which the case is running (default: has to be given \n"\
+                            "either by the command line or the xml setup file)")
     main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
     main_group.add_argument('--name', help="case name (default: 'COSMO_CLM2')")
     main_group.add_argument('--path', help="directory where the case is set up (default: $SCRATCH/NAME on daint)")
@@ -735,26 +736,43 @@ def create_new_case():
     if opts.gen_oasis:
         opts.dummy_day = False
 
-    # Set options to xml value if needed or default if nothing provided
-    # -----------------------------------------------------------------
-    # Common options defaults
-    defaults = {'name': 'COSMO_CLM2', 'path': None, 'cosmo_only': False,
-                'start_date': None, 'end_date': None, 'run_length': None,
-                'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
-                'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
-                'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
-                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
-                'dummy_day': True, 'gpu_mode': False}
-    # daint options defaults
-    defaults.update({'wall_time': '24:00:00', 'account': None, 'partition': None,
-                     'modules_opt': 'switch', 'pgi_version': None, 'login_shell': True})
+    # Set options to xml value if needed or default if nothing provided then perform some checks
+    # ------------------------------------------------------------------------------------------
+    valid_machines = ['daint']
+    # options defaults
+    defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None, 'cosmo_only': False,
+                         'start_date': None, 'end_date': None, 'run_length': None,
+                         'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
+                         'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
+                         'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
+                         'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
+                         'dummy_day': True, 'gpu_mode': False},
+                'daint': {'wall_time': '24:00:00', 'account': None, 'partition': None,
+                          'modules_opt': 'switch', 'pgi_version': None, 'login_shell': True}}
+
+    # Apply default main options
     if opts.setup_file is not None:
         tree = ET.parse(opts.setup_file)
-        xml_node = tree.getroot().find('cmd_line')
+        xml_node = tree.getroot().find('main')
     else:
         xml_node = None
-    apply_defaults(opts, xml_node, defaults)
+    apply_defaults(opts, xml_node, defaults['main'])
 
+    # Check machine
+    if opts.machine is None:
+        raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
+    elif opts.machine not in valid_machines:
+        raise ValueError("invalid 'machine' option. Has to be either of " + str(valid_machines))
+
+    # Apply default machine specific options
+    if opts.setup_file is not None:
+        tree = ET.parse(opts.setup_file)
+        xml_node = tree.getroot().find(opts.machine)
+    else:
+        xml_node = None
+    apply_defaults(opts, xml_node, defaults[opts.machine])
+
+    # Check case path
     if opts.path is None:
         if opts.machine == 'daint':
             opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
@@ -885,7 +903,7 @@ def apply_defaults(opts, xml_node, defaults):
                             setattr(opts, opt, opt_type(opt_val_str))
                         else:
                             raise ValueError("xml atribute 'type' for option {:s}".format(opt)
-                                             + " is not a valid python type")
+                                             + " is not a valid python type nor 'py_eval'")
         if apply_def:
             setattr(opts, opt, default)
 
