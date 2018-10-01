@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<setup>
+  <cmd_line>
+    <!-- Options that can also be set through the command line.
+         Command line takes precedence -->
+    <name>COSMO_CLM2</name>
+    <path></path>
+    <cosmo_only></cosmo_only>
+    <start_date></start_date>
+    <end_date></end_date>
+    <run_length></run_length>
+    <cos_in>./COSMO_input</cos_in>
+    <cos_nml>./COSMO_nml</cos_nml>
+    <cos_exe>./cosmo</cos_exe>
+    <cesm_in>./CESM_input</cesm_in>
+    <cesm_nml>./CESM_nml</cesm_nml>
+    <cesm_exe>./cesm.exe</cesm_exe>
+    <oas_in>./OASIS_input</oas_in>
+    <oas_nml>./OASIS_nml</oas_nml>
+    <ncosx type="int"></ncosx>
+    <ncosy type="int"></ncosy>
+    <ncosio type="int"></ncosio>
+    <ncesm type="int"></ncesm>
+    <gpu_mode type="py_eval">False</gpu_mode>
+    <dummy_day type="py_eval">True</dummy_day>
+    <wall_time>24:00:00</wall_time>
+    <account></account>
+    <partition></partition>
+    <modules_opt>switch</modules_opt>
+    <pgi_version></pgi_version>
+    <login_shell type="py_eval">True</login_shell>
+  </cmd_line>
+  <!-- Any namelist parameter can be changed by adding a <change_par> node directly under the <setup> node
+       with attributes following this example
+       <change_par file="INPUT_ORG" block="runctl" param="lreproduce" type="py_eval">True</change_par>
+       - The value of the node is the new value of the namelist parameter
+       - don't give the namelist file path, only the file name is needed.
+       - type attribute can be any of the valid python types or "py_eval", in which case python
+         will interpret the value. the default type is string
+       - an "n" attribute starting at 1 (not 0) can also be given to target one of several blocks
+         sharing the same name in a namelist, e.g. "gribout" blocks in INPUT_IO.
+  -->
+</setup>
