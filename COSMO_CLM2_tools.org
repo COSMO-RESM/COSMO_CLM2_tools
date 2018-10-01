@@ -19,7 +19,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
   the cc2_create_case command. This is the result of =cc2_create_case
   --help=:
   #+BEGIN_SRC text
-    usage: cc2_create_case [-h] --machine MACH [-s FILE] [--name NAME]
+    usage: cc2_create_case [-h] [--machine MACH] [-s FILE] [--name NAME]
                            [--path PATH] [--cosmo_only COSMO_ONLY]
                            [--start_date DATE_1] [--end_date DATE_2]
                            [--run_length dt] [--cos_in COS_IN] [--cos_nml COS_NML]
@@ -42,11 +42,12 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
     optional arguments:
       -h, --help            show this help message and exit
-      --machine MACH        machine on which the case is running
 
     main:
       Options common to all machines
 
+      --machine MACH        machine on which the case is running (default: has to be given 
+                            either by the command line or the xml setup file)
       -s FILE, --setup-file FILE
                             xml file conatining setup options
       --name NAME           case name (default: 'COSMO_CLM2')
