@@ -451,7 +451,6 @@ class daint_case(base_case):
         self.pgi_version = pgi_version
         self.login_shell = login_shell
         self.partition = partition
-        print(base_case_args)
         base_case.__init__(self, **base_case_args)
 
 
