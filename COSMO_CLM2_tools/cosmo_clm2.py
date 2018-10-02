@@ -10,6 +10,7 @@ from glob import glob
 from socket import gethostname
 import shutil
 import time
+import sys
 from warnings import warn
 
 # Date formats
@@ -594,6 +595,7 @@ class daint_case(base_case):
             self._build_proc_config()
             run_cmd = 'srun -u --multi-prog ./proc_config'
         print("running " + run_cmd)
+        sys.stdout.flush()
         check_call(run_cmd, shell=True)
 
 class nmldict(dict):

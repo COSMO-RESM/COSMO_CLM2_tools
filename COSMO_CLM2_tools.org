@@ -180,6 +180,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
       from socket import gethostname
       import shutil
       import time
+      import sys
       from warnings import warn
 
       # Date formats
@@ -672,7 +673,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   # else:
                   #     script.write('#!/bin/bash\n')
                   script.write('#!/usr/bin/env bash\n')
-            
+
                   # slurm options
                   script.write('#SBATCH --constraint=gpu\n')
                   script.write('#SBATCH --job-name={:s}\n'.format(self.name))
@@ -685,7 +686,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   if self.partition is not None:
                       script.write('#SBATCH --partition={:s}\n'.format(self.partition))
                   script.write('\n')
-            
+
                   # environment variables
                   script.write('export MALLOC_MMAP_MAX_=0\n')
                   script.write('export MALLOC_TRIM_THRESHOLD_=536870912\n')
@@ -703,7 +704,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                       script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
                       script.write('export MPICH_G2G_PIPELINE=256\n')
                   script.write('\n')
-                
+
                   # Modules
                   if self.modules_opt != 'none':
                       # pgi programing environment
@@ -727,18 +728,18 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                               script.write('export PGI_VERS_STR=17.10.0\n')
                           else:
                               raise ValueError("valid pgi versions are '16.9.0', '17.5.0' or '17.10.0'")
-                    
+
                       # other modules
                       script.write('module load daint-gpu\n')
                       script.write('module load cray-netcdf\n')
                       if self.gpu_mode:
                           script.write('module load craype-accel-nvidia60\n')    
                       script.write('\n')
-            
+
                   # Check loaded modules
                   script.write('module list\n')
                   script.write('\n')
-            
+
                   # launch case
                   script.write('cc2_control_case ./config.xml\n')
 
@@ -787,6 +788,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   self._build_proc_config()
                   run_cmd = 'srun -u --multi-prog ./proc_config'
               print("running " + run_cmd)
+              sys.stdout.flush()
               check_call(run_cmd, shell=True)
 
     #+END_SRC
