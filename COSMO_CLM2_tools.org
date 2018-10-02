@@ -969,12 +969,15 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               raise ValueError("invalid 'machine' option. Has to be either of " + str(valid_machines))
 
           # Apply default machine specific options
-          if opts.setup_file is not None:
-              tree = ET.parse(opts.setup_file)
-              xml_node = tree.getroot().find(opts.machine)
+          if opts.machine not in defaults:
+              raise NotImplementedError("default options not implemented for machine {:s}".format(opts.machine))
           else:
-              xml_node = None
-          apply_defaults(opts, xml_node, defaults[opts.machine])
+              if opts.setup_file is not None:
+                  tree = ET.parse(opts.setup_file)
+                  xml_node = tree.getroot().find(opts.machine)
+              else:
+                  xml_node = None
+              apply_defaults(opts, xml_node, defaults[opts.machine])
 
           # Check case path
           if opts.path is None:
