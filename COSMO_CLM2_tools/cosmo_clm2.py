@@ -569,6 +569,7 @@ class daint_case(base_case):
     def _update_xml_config(self, config):
         ET.SubElement(config, 'machine').text = 'daint'
         ET.SubElement(config, 'account').text = self.account
+        ET.SubElement(config, 'wall_time').text = self.wall_time
         if self.partition is not None:
             ET.SubElement(config, 'partition').text = self.partition
         if self.modules_opt is not None:
