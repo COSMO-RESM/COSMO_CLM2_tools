@@ -1048,14 +1048,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                       name = node.get('file')
                       block = node.get('block')
                       n = node.get('n')
-                      param = node.get("param")
+                      param = node.get('param')
                       val_str = node.text
                       if name is None:
-                          raise ValueError("namelist file xml attribute is required to change parameter")
+                          raise ValueError("'file' xml attribute is required to change parameter")
                       if block is None:
-                          raise ValueError("block xml attribute is required to change parameter")
+                          raise ValueError("'block' xml attribute is required to change parameter")
                       if param is None:
-                          raise ValueError("param xml attribute is required to change parameter")
+                          raise ValueError("'param' xml attribute is required to change parameter")
                       nml = cc2case.nml[name][block]
                       if node.get('type') is None:
                           value = val_str
