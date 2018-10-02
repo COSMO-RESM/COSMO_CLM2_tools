@@ -763,12 +763,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               ET.SubElement(config, 'machine').text = 'daint'
               ET.SubElement(config, 'account').text = self.account
               ET.SubElement(config, 'wall_time').text = self.wall_time
-              if self.partition is not None:
-                  ET.SubElement(config, 'partition').text = self.partition
-              if self.modules_opt is not None:
-                  ET.SubElement(config, 'modules_opt').text = self.modules_opt
-              if self.pgi_version is not None:
-                  ET.SubElement(config, 'pgi_version').text = self.pgi_version
+              ET.SubElement(config, 'partition').text = self.partition
+              ET.SubElement(config, 'modules_opt').text = self.modules_opt
+              ET.SubElement(config, 'pgi_version').text = self.pgi_version
               ET.SubElement(config, 'login_shell', attrib={'type': 'bool'}).text = '1' if self.login_shell else ''
 
 
