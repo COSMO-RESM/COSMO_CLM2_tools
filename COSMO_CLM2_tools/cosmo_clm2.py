@@ -60,7 +60,7 @@ class base_case(object):
         return self._path
     @path.setter
     def path(self, path):
-        self._path = os.path.abspath(os.path.join(os.environ['SCRATCH'], self.name))
+        self._path = os.path.abspath(path)
 
     @property
     def name(self):
@@ -451,6 +451,7 @@ class daint_case(base_case):
         self.pgi_version = pgi_version
         self.login_shell = login_shell
         self.partition = partition
+        print(base_case_args)
         base_case.__init__(self, **base_case_args)
 
 
