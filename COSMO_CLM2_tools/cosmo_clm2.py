@@ -59,10 +59,7 @@ class base_case(object):
         return self._path
     @path.setter
     def path(self, path):
-        if path is None:
-            self._path = os.path.abspath(os.path.join(os.environ['SCRATCH'], self.name))
-        else:
-            self._path = os.path.abspath(path)
+        self._path = os.path.abspath(os.path.join(os.environ['SCRATCH'], self.name))
 
     @property
     def name(self):
