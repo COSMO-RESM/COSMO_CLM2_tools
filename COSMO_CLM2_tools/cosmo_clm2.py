@@ -545,10 +545,6 @@ class daint_case(base_case):
                     script.write('module load craype-accel-nvidia60\n')    
                 script.write('\n')
 
-            # Check loaded modules
-            script.write('module list\n')
-            script.write('\n')
-
             # launch case
             script.write('cc2_control_case ./config.xml\n')
 
