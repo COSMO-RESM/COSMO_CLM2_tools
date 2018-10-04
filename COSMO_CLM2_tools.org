@@ -520,15 +520,15 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               tree = ET.ElementTree(config)
               ET.SubElement(config, 'name').text = self.name
               ET.SubElement(config, 'path').text = self.path
-              ET.SubElement(config, 'cosmo_only', attrib={'type': 'bool'}).text = '1' if self.cosmo_only else ''
+              ET.SubElement(config, 'cosmo_only', type='py_eval').text = str(self.cosmo_only)
               ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt_in)
               ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt_in)
               ET.SubElement(config, 'run_length').text = self.run_length
               ET.SubElement(config, 'COSMO_exe').text = self.COSMO_exe
               if not self.cosmo_only:
                   ET.SubElement(config, 'CESM_exe').text = self.CESM_exe
-              ET.SubElement(config, 'gpu_mode', attrib={'type': 'bool'}).text = '1' if self.gpu_mode else ''
-              ET.SubElement(config, 'dummy_day', attrib={'type': 'bool'}).text = '1' if self.dummy_day else ''
+              ET.SubElement(config, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
+              ET.SubElement(config, 'dummy_day', type='py_eval').text = str(self.dummy_day)
               self._update_xml_config(config)
               indent(config)
               tree.write(os.path.join(self.path, file_name), xml_declaration=True)
@@ -550,13 +550,15 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
                   if opt is not config and opt is not machine_node:
                       if opt.get('type') is None:
                           args[opt.tag] = opt.text
+                      elif opt.get('type') == 'py_eval':
+                          args[opt.tag] = eval(opt.text)
                       else:
                           opt_type = eval(opt.get('type'))
                           if isinstance(opt_type, type):
                               args[opt.tag] = opt_type(opt.text)
                           else:
                               raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
-                                               + " is not a valid python type")
+                                               + " has to be a valid python or 'py_eval'")
 
               if machine == 'daint':
                   return daint_case(**args)
@@ -766,7 +768,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
               ET.SubElement(config, 'partition').text = self.partition
               ET.SubElement(config, 'modules_opt').text = self.modules_opt
               ET.SubElement(config, 'pgi_version').text = self.pgi_version
-              ET.SubElement(config, 'login_shell', attrib={'type': 'bool'}).text = '1' if self.login_shell else ''
+              ET.SubElement(config, 'login_shell', type='py_eval').text = str(self.login_shell)
 
 
           def _submit_func(self):
