@@ -30,9 +30,11 @@ class base_case(object):
                  start_date=None, end_date=None, run_length=None,
                  COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
-                 gpu_mode=False, dummy_day=True, cosmo_only=False):
+                 gpu_mode=False, dummy_day=True, cosmo_only=False,
+                 gen_oasis=False):
         # Basic init (no particular work required)
         self.cosmo_only = cosmo_only
+        self.gen_oasis = gen_oasis
         self.run_length = run_length
         self.COSMO_exe = COSMO_exe
         if not self.cosmo_only:
@@ -154,6 +156,8 @@ class base_case(object):
             # Apply number of CESM tasks to all relevant namelist parameters
             for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
                 self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
+            if self.gen_oasis:
+                self.nml['drv_in']['ccsm_pes']['atm_ntasks'] = 1
 
 
     def _compute_run_dates(self):
@@ -331,6 +335,7 @@ class base_case(object):
         ET.SubElement(config, 'name').text = self.name
         ET.SubElement(config, 'path').text = self.path
         ET.SubElement(config, 'cosmo_only', type='py_eval').text = str(self.cosmo_only)
+        ET.SubElement(config, 'gen_oasis', type='py_eval').text = str(self.gen_oasis)
         ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt_in)
         ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt_in)
         ET.SubElement(config, 'run_length').text = self.run_length
@@ -736,7 +741,8 @@ def create_new_case():
     # ------------------------------------------------------------------------------------------
     valid_machines = ['daint']
     # options defaults
-    defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None, 'cosmo_only': False,
+    defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None,
+                         'cosmo_only': False, 'gen_oasis': False
                          'start_date': None, 'end_date': None, 'run_length': None,
                          'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
                          'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
@@ -813,7 +819,8 @@ def create_new_case():
 
     # Create case instance
     # ====================
-    case_args = {'name': opts.name, 'path': opts.path, 'cosmo_only': opts.cosmo_only,
+    case_args = {'name': opts.name, 'path': opts.path,
+                 'cosmo_only': opts.cosmo_only, 'gen_oasis': opts.gen_oasis,
                  'start_date': opts.start_date, 'end_date': opts.end_date,
                  'run_length': opts.run_length, 'COSMO_exe': os.path.basename(opts.cos_exe),
                  'CESM_exe': os.path.basename(opts.cesm_exe), 'ncosx': opts.ncosx,
@@ -865,9 +872,6 @@ def create_new_case():
                     nml[param] = value
                 else:
                     nml[int(n)-1][param] = value
-    # Change namelist parameters from certain cmd line arguments
-    if opts.gen_oasis:
-        cc2case.nml['drv_in']['ccsm_pes']['atm_ntasks'] = 1
 
     # Finalize
     # ========
