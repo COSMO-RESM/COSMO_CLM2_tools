@@ -742,7 +742,7 @@ def create_new_case():
     valid_machines = ['daint']
     # options defaults
     defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None,
-                         'cosmo_only': False, 'gen_oasis': False
+                         'cosmo_only': False, 'gen_oasis': False,
                          'start_date': None, 'end_date': None, 'run_length': None,
                          'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
                          'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
