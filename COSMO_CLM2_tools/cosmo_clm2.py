@@ -600,7 +600,7 @@ class daint_case(base_case):
         check_call(run_cmd, shell=True)
 
 class nmldict(dict):
-    """Dictionnary of all the namelists of a case. Only load tha namelist if needed"""
+    """Dictionnary of all the namelists of a case. Only load the namelist if needed"""
     def __init__(self, cc2case):
         dict.__init__(self)
         self.cc2case = cc2case
