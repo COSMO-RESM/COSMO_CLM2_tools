@@ -1,4 +1,5 @@
 from __future__ import print_function
+from .daint_case import daint_case
 from .date_formats import date_fmt_in, date_fmt_cosmo
 from subprocess import check_call
 from argparse import ArgumentParser, RawTextHelpFormatter
