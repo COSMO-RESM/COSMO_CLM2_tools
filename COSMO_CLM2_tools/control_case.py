@@ -11,7 +11,7 @@ def control_case():
     cfg = parser.parse_args()
 
     # build cc2case object from xml file
-    config = ET.parse(os.path.normpath(cfg.xml_path)).getroot()
+    config = ET.parse(cfg.xml_path).getroot()
     machine_node = config.find('machine')
     if machine_node is None:
         raise ValueError("machine node not found in {:s}".format(xml_file))
