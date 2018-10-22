@@ -168,8 +168,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
    :END:
 *** preamble
     #+BEGIN_SRC python
-      from .date_formats import date_fmt_in, date_fmt_cosmo, date_fmt_cesm
       from __future__ import print_function
+      from .date_formats import date_fmt_in, date_fmt_cosmo, date_fmt_cesm
       from subprocess import check_call
       from argparse import ArgumentParser, RawTextHelpFormatter
       import f90nml
@@ -638,9 +638,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
 ** daint_case.py
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/daint_case.py :comments no
+     from __future__ import print_function
      from .base_case import base_case
      from .date_formats import date_fmt_in, date_fmt_cosmo, date_fmt_cesm
-     from __future__ import print_function
      from subprocess import check_call
      import os
      import re
@@ -806,12 +806,12 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
    #+END_SRC
 ** create_case.py
    :PROPERTIES:
-   :header-args: :tangle COSMO_CLM2_tools/create_new_case.py :comments no
+   :header-args: :tangle COSMO_CLM2_tools/create_case.py :comments no
    :END:
 *** preamble
     #+BEGIN_SRC python
-      from .date_formats import date_fmt_in, date_fmt_cosmo
       from __future__ import print_function
+      from .date_formats import date_fmt_in, date_fmt_cosmo
       from subprocess import check_call
       from argparse import ArgumentParser, RawTextHelpFormatter
       import f90nml
