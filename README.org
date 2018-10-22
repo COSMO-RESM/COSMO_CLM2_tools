@@ -1,4 +1,4 @@
-# Created 2018-10-01 Mon 17:58
+# Created 2018-10-22 Mon 17:00
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
 #+EXPORT_FILE_NAME: README
@@ -48,7 +48,7 @@ the cc2_create_case command. This is the result of =cc2_create_case
   main:
     Options common to all machines
   
-    --machine MACH        machine on which the case is running (default: has to be given 
+    --machine MACH        machine on which the case is running (default: has to be given
                           either by the command line or the xml setup file)
     -s FILE, --setup-file FILE
                           xml file conatining setup options

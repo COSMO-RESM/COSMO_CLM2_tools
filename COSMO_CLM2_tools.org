@@ -47,7 +47,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
     main:
       Options common to all machines
 
-      --machine MACH        machine on which the case is running (default: has to be given 
+      --machine MACH        machine on which the case is running (default: has to be given
                             either by the command line or the xml setup file)
       -s FILE, --setup-file FILE
                             xml file conatining setup options
