@@ -1248,4 +1248,4 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
   #+END_SRC
 
 * Notes                                                            :noexport:
-** WAITING Enable COSMO only                                            :dev:
+** DONE Enable COSMO only                                               :dev:
