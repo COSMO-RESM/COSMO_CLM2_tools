@@ -752,7 +752,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.
 
 
          def _submit_func(self):
-             check_call(['sbatch', 'controller', './config.xml'])
+             check_call(['sbatch', 'controller'])
 
 
          def _run_func(self):

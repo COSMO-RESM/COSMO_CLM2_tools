@@ -144,7 +144,7 @@ class daint_case(base_case):
 
 
     def _submit_func(self):
-        check_call(['sbatch', 'controller', './config.xml'])
+        check_call(['sbatch', 'controller'])
 
 
     def _run_func(self):
