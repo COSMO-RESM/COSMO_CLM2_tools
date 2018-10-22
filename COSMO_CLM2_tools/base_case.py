@@ -345,38 +345,6 @@ class base_case(object):
         tree.write(os.path.join(self.path, file_name), xml_declaration=True)
 
 
-    @staticmethod
-    def from_xml(xml_file):
-        """Build a case from xml file"""
-
-        config = ET.parse(os.path.normpath(xml_file)).getroot()
-        machine_node = config.find('machine')
-        if machine_node is None:
-            raise ValueError("machine node not found in {:s}".format(xml_file))
-        else:
-            machine = machine_node.text
-
-        args={}
-        for opt in config.iter():
-            if opt is not config and opt is not machine_node:
-                if opt.get('type') is None:
-                    args[opt.tag] = opt.text
-                elif opt.get('type') == 'py_eval':
-                    args[opt.tag] = eval(opt.text)
-                else:
-                    opt_type = eval(opt.get('type'))
-                    if isinstance(opt_type, type):
-                        args[opt.tag] = opt_type(opt.text)
-                    else:
-                        raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
-                                         + " has to be a valid python or 'py_eval'")
-
-        if machine == 'daint':
-            return daint_case(**args)
-        else:
-            raise NotImplementedError("machine {:s} not implemeted".format(machine))
-
-
     def set_next_run(self):
         if ((self._run_start_date >= self._end_date) or
             (self._run_end_date == self._end_date and not self.dummy_day)):
