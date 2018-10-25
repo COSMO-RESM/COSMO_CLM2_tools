@@ -30,8 +30,13 @@
     <partition></partition>
     <modules_opt>switch</modules_opt>
     <pgi_version></pgi_version>
-    <login_shell type="py_eval">True</login_shell>
+    <shebang>#!/usr/bin/env bash</shebang>
   </daint>
+  <mistral>
+    <wall_time>08:00:00</wall_time>
+    <account></account>
+    <partition></partition>
+  </mistral>
   <!-- Any namelist parameter can be changed by adding a <change_par> node directly under the <setup> node
        with attributes following this example
        <change_par file="INPUT_ORG" block="runctl" param="lreproduce" type="py_eval">True</change_par>

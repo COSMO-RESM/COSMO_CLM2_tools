@@ -96,17 +96,6 @@ class base_case(object):
         else:
             self._end_date = None
 
-    @property
-    def account(self):
-        return self._account
-    @account.setter
-    def account(self, acc):
-        if acc is None:
-            # Guess from ${PROJECT} environment variable
-            self._account = os.path.normpath(os.environ['PROJECT']).split(os.path.sep)[-2]
-        else:
-            self._account = acc
-
 
     def _organize_tasks(self, ncosx, ncosy, ncosio, ncesm):
         # COSMO tasks

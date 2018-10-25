@@ -1,5 +1,6 @@
 from __future__ import print_function
 from .daint_case import daint_case
+from .mistral_case import mistral_case
 from .date_formats import date_fmt_in, date_fmt_cosmo
 from subprocess import check_call
 from argparse import ArgumentParser, RawTextHelpFormatter
@@ -74,18 +75,19 @@ def create_case():
                             help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                             "(type: bool, using anything Python can parse as a boolean, default: True)")
 
+    slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager')
+    slurm_group.add_argument('--wall_time', help="reserved time on compute nodes\n"\
+                             "(default: '24:00:00' on daint, '08:00:00' on mistral)")
+    slurm_group.add_argument('--account', help="account to use for batch script\n"\
+                             "(default: infered from $PROJECT on daint, None on mistral)")
+    slurm_group.add_argument('--partition', help="select a queue (default: None)")
+
     daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
-    daint_group.add_argument('--wall_time', help="reserved time on compute nodes (default: '24:00:00')")
-    daint_group.add_argument('--account', help="account to use for batch script (default: infered from $PROJECT)")
-    daint_group.add_argument('--partition', help="select a queue (default: None)")
     daint_group.add_argument('--modules_opt', choices=['switch', 'none', 'purge'],
                              help="Option for loading modules at run time (default: 'switch')")
-    daint_group.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0'],
+    daint_group.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0, 18.5.0'],
                              help="specify pgi compiler version at run time (default: None)")
-    daint_group.add_argument('--login_shell', type=str_to_bool,
-                             help="DEACTIVATED\nAdd the '-l' option to the submit script shebang.\n"\
-                             "(type: bool, using anything Python can parse as a boolean,\n"\
-                             "default: True)")
+    daint_group.add_argument('--shebang', help="submit script shebang (default: '#!/usr/bin/env bash')")
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
@@ -102,7 +104,7 @@ def create_case():
 
     # Set options to xml value if needed or default if nothing provided then perform some checks
     # ------------------------------------------------------------------------------------------
-    valid_machines = ['daint']
+    valid_machines = ['daint', 'mistral']
     # options defaults
     defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None,
                          'cosmo_only': False, 'gen_oasis': False,
@@ -113,7 +115,8 @@ def create_case():
                          'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
                          'dummy_day': True, 'gpu_mode': False},
                 'daint': {'wall_time': '24:00:00', 'account': None, 'partition': None,
-                          'modules_opt': 'switch', 'pgi_version': None, 'login_shell': True}}
+                          'modules_opt': 'switch', 'pgi_version': None, 'shebang': '#!/usr/bin/env bash'},
+                'mistral': {'wall_time': '08:00:00', 'account': None, 'partition': None}}
 
     # Apply default main options
     if opts.setup_file is not None:
@@ -193,7 +196,11 @@ def create_case():
         case_class = daint_case
         machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
                         'partition': opts.partition,'modules_opt': opts.modules_opt,
-                        'pgi_version': opts.pgi_version, 'login_shell': opts.login_shell}
+                        'pgi_version': opts.pgi_version, 'shebang': opts.shebang}
+    elif opts.machine == 'daint':
+        case_class = mistral_case
+        machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
+                        'partition': opts.partition}
     else:
         raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
 
@@ -288,17 +295,20 @@ def apply_defaults(opts, xml_node, defaults):
                     apply_def = True
                 else:
                     opt_val_str = xml_opt.text
-                    if xml_opt.get('type') is None:
-                        setattr(opts, opt, opt_val_str)
-                    elif xml_opt.get('type') == 'py_eval':
-                        setattr(opts, opt, eval(opt_val_str))
+                    if opt_val_str is None:
+                        apply_def = True
                     else:
-                        opt_type = eval(xml_opt.get('type'))
-                        if isinstance(opt_type, type):
-                            setattr(opts, opt, opt_type(opt_val_str))
+                        if xml_opt.get('type') is None:
+                            setattr(opts, opt, opt_val_str)
+                        elif xml_opt.get('type') == 'py_eval':
+                            setattr(opts, opt, eval(opt_val_str))
                         else:
-                            raise ValueError("xml atribute 'type' for option {:s}".format(opt)
-                                             + " is not a valid python type nor 'py_eval'")
+                            opt_type = eval(xml_opt.get('type'))
+                            if isinstance(opt_type, type):
+                                setattr(opts, opt, opt_type(opt_val_str))
+                            else:
+                                raise ValueError("xml atribute 'type' for option {:s}".format(opt)
+                                                 + " is not a valid python type nor 'py_eval'")
         if apply_def:
             setattr(opts, opt, default)
 

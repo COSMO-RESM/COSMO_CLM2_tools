@@ -14,15 +14,26 @@ class daint_case(base_case):
     _n_tasks_per_node = 12
 
     def __init__(self, wall_time='24:00:00', account=None, partition=None,
-                 login_shell=True, modules_opt='switch', pgi_version=None,
+                 shebang='#!/usr/bin/env bash', modules_opt='switch', pgi_version=None,
                  **base_case_args):
         self.wall_time = wall_time
         self.account = account
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version
-        self.login_shell = login_shell
+        self.shebang = shebang
         self.partition = partition
         base_case.__init__(self, **base_case_args)
+
+    @property
+    def account(self):
+        return self._account
+    @account.setter
+    def account(self, acc):
+        if acc is None:
+            # Guess from ${PROJECT} environment variable
+            self._account = os.path.normpath(os.environ['PROJECT']).split(os.path.sep)[-2]
+        else:
+            self._account = acc
 
 
     def _build_proc_config(self):
@@ -46,11 +57,7 @@ class daint_case(base_case):
                                               self._run_end_date.strftime(date_fmt_cesm))
         with open(os.path.join(self.path, 'controller'), mode='w') as script:
             # shebang
-            # if self.login_shell:
-            #     script.write('#!/bin/bash -l\n')
-            # else:
-            #     script.write('#!/bin/bash\n')
-            script.write('#!/usr/bin/env bash\n')
+            script.write('{:s}\n\n'.format(self.shebang))
 
             # slurm options
             script.write('#SBATCH --constraint=gpu\n')
@@ -93,19 +100,13 @@ class daint_case(base_case):
                     script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
                 # pgi version
                 if self.pgi_version is not None:
-                    if self.pgi_version == '16.9.0':
-                        script.write('module unload pgi\n')
-                        script.write('module load pgi/16.9.0\n')
-                    elif self.pgi_version == '17.5.0':
-                        script.write('module unload pgi\n')
-                        script.write('module load pgi/17.5.0\n')
-                    elif self.pgi_version == '17.10.0':
-                        script.write('module unload pgi\n')
+                    script.write('module unload pgi\n')
+                    if self.pgi_version == '17.10.0':
                         script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
                         script.write('module load pgi/17.10\n')
                         script.write('export PGI_VERS_STR=17.10.0\n')
                     else:
-                        raise ValueError("valid pgi versions are '16.9.0', '17.5.0' or '17.10.0'")
+                        script.write('module load pgi/{:s}\n'.format(self.pgi_version))
 
                 # other modules
                 script.write('module load daint-gpu\n')
@@ -140,7 +141,7 @@ class daint_case(base_case):
         ET.SubElement(config, 'partition').text = self.partition
         ET.SubElement(config, 'modules_opt').text = self.modules_opt
         ET.SubElement(config, 'pgi_version').text = self.pgi_version
-        ET.SubElement(config, 'login_shell', type='py_eval').text = str(self.login_shell)
+        ET.SubElement(config, 'shebang').text = str(self.shebang)
 
 
     def _submit_func(self):
