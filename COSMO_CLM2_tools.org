@@ -902,6 +902,17 @@ Tools for automated creation and run of COSMO_CLM2 simulations
     - [ ] For now, no choice for the I/O directory structure. Maybe no
       need to implement this.
     - [ ] Do first transfering namelists, then create case, then transfer input
+    - [ ] Implement defaults in a cleaner way:
+      - keep them in the case class ~__init__~ funtion and only
+        provide none empty options after merging setup.xml and command
+        line.
+      - A correspondance between command line / setup file options
+        name and class arguments is still needed ... or stick to the
+        same names!
+      - Use ~vars(parser.parse_args())~ to get a dict, retain only
+        none ~None~ options to build the arguments dict for the case
+        constructor and then add xml options to it when not already
+        defined.
     #+BEGIN_SRC python
       def create_case():
           """
