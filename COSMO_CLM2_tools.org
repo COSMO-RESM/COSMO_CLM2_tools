@@ -165,6 +165,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations
             - an "n" attribute starting at 1 (not 0) can also be given to target one of several blocks
               sharing the same name in a namelist, e.g. "gribout" blocks in INPUT_IO.
        -->
+       <!-- In the same way, any namelist parameter can be deleted by adding an
+            empty <del_par> node directly under the <setup> node with attributes following this example
+            <del_par file="INPUT_ORG" block="runctl" param="lreproduce" />
+            - don't give the namelist file path, only the file name is needed.
+            - an "n" attribute starting at 1 (not 0) can also be given to target one of several blocks
+              sharing the same name in a namelist, e.g. "gribout" blocks in INPUT_IO.
+            - Obviouly any value given to that node is ignored
+       -->
      </setup>
    #+END_SRC
 ** base_case.py
@@ -1090,10 +1098,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           case_args.update(machine_args)
           cc2case = case_class(**case_args)
 
-          # Change parameters from xml file if required
-          # ===========================================
-          # Change namelist parameters from xml file
+          # Change/delete namelists parameters following xml file
+          # =====================================================
           if opts.setup_file is not None:
+              # Modify namelist parameters
               nodes = tree.getroot().findall('change_par')
               if nodes:
                   for node in nodes:
@@ -1108,7 +1116,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                           raise ValueError("'block' xml attribute is required to change parameter")
                       if param is None:
                           raise ValueError("'param' xml attribute is required to change parameter")
-                      nml = cc2case.nml[name][block]
                       if node.get('type') is None:
                           value = val_str
                       elif node.get('type') == 'py_eval':
@@ -1122,9 +1129,28 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                                          "It has to be either 'py_eval' or a valid build in python type"
                               raise ValueError(err_mess.format(param, val_type))
                       if n is None:
-                          nml[param] = value
+                          cc2case.nml[name][block][param] = value
                       else:
-                          nml[int(n)-1][param] = value
+                          cc2case.nml[name][block][int(n)-1][param] = value
+                    
+              # Delete namelist parameters
+              nodes = tree.getroot().findall('del_par')
+              if nodes:
+                  for node in nodes:
+                      name = node.get('file')
+                      block = node.get('block')
+                      n = node.get('n')
+                      param = node.get('param')
+                      if name is None:
+                          raise ValueError("'file' xml attribute is required to delete parameter")
+                      if block is None:
+                          raise ValueError("'block' xml attribute is required to delete parameter")
+                      if param is None:
+                          raise ValueError("'param' xml attribute is required to delete parameter")
+                      if n is None:
+                          del cc2case.nml[name][block][param]
+                      else:
+                          del cc2case.nml[name][block][int(n)-1][param]
 
           # Finalize
           # ========

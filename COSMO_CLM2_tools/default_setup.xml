@@ -47,4 +47,12 @@
        - an "n" attribute starting at 1 (not 0) can also be given to target one of several blocks
          sharing the same name in a namelist, e.g. "gribout" blocks in INPUT_IO.
   -->
+  <!-- In the same way, any namelist parameter can be deleted by adding an
+       empty <del_par> node directly under the <setup> node with attributes following this example
+       <del_par file="INPUT_ORG" block="runctl" param="lreproduce" />
+       - don't give the namelist file path, only the file name is needed.
+       - an "n" attribute starting at 1 (not 0) can also be given to target one of several blocks
+         sharing the same name in a namelist, e.g. "gribout" blocks in INPUT_IO.
+       - Obviouly any value given to that node is ignored
+  -->
 </setup>

@@ -207,10 +207,10 @@ def create_case():
     case_args.update(machine_args)
     cc2case = case_class(**case_args)
 
-    # Change parameters from xml file if required
-    # ===========================================
-    # Change namelist parameters from xml file
+    # Change/delete namelists parameters following xml file
+    # =====================================================
     if opts.setup_file is not None:
+        # Modify namelist parameters
         nodes = tree.getroot().findall('change_par')
         if nodes:
             for node in nodes:
@@ -225,7 +225,6 @@ def create_case():
                     raise ValueError("'block' xml attribute is required to change parameter")
                 if param is None:
                     raise ValueError("'param' xml attribute is required to change parameter")
-                nml = cc2case.nml[name][block]
                 if node.get('type') is None:
                     value = val_str
                 elif node.get('type') == 'py_eval':
@@ -239,9 +238,28 @@ def create_case():
                                    "It has to be either 'py_eval' or a valid build in python type"
                         raise ValueError(err_mess.format(param, val_type))
                 if n is None:
-                    nml[param] = value
+                    cc2case.nml[name][block][param] = value
                 else:
-                    nml[int(n)-1][param] = value
+                    cc2case.nml[name][block][int(n)-1][param] = value
+
+        # Delete namelist parameters
+        nodes = tree.getroot().findall('del_par')
+        if nodes:
+            for node in nodes:
+                name = node.get('file')
+                block = node.get('block')
+                n = node.get('n')
+                param = node.get('param')
+                if name is None:
+                    raise ValueError("'file' xml attribute is required to delete parameter")
+                if block is None:
+                    raise ValueError("'block' xml attribute is required to delete parameter")
+                if param is None:
+                    raise ValueError("'param' xml attribute is required to delete parameter")
+                if n is None:
+                    del cc2case.nml[name][block][param]
+                else:
+                    del cc2case.nml[name][block][int(n)-1][param]
 
     # Finalize
     # ========
