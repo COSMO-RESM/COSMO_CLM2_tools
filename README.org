@@ -1,10 +1,10 @@
-# Created 2018-10-22 Mon 17:00
+# Created 2018-10-25 Thu 17:19
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
 #+EXPORT_FILE_NAME: README
 #+STARTUP: overview
 
-Tools for automated creation and run of COSMO_CLM2 simulations (on [[http://www.cscs.ch/computers/piz_daint/index.html][Piz Daint]] only)
+Tools for automated creation and run of COSMO_CLM2 simulations
 
 * Install
 - Install COSMO_CLM2_tools
@@ -32,8 +32,8 @@ the cc2_create_case command. This is the result of =cc2_create_case
                          [--wall_time WALL_TIME] [--account ACCOUNT]
                          [--partition PARTITION]
                          [--modules_opt {switch,none,purge}]
-                         [--pgi_version {16.9.0,17.5.0,17.10.0}]
-                         [--login_shell LOGIN_SHELL] [--no_submit] [--gen_oasis]
+                         [--pgi_version {16.9.0,17.5.0,17.10.0, 18.5.0}]
+                         [--shebang SHEBANG] [--no_submit] [--gen_oasis]
   
   Set up and run a COSMO_CLM2 case
   --------------------------------
@@ -86,23 +86,25 @@ the cc2_create_case command. This is the result of =cc2_create_case
                           perform a dummy day run after end of simulation to get last COSMO output.
                           (type: bool, using anything Python can parse as a boolean, default: True)
   
+  slurm:
+    Options specific to the slurm workload manager
+  
+    --wall_time WALL_TIME
+                          reserved time on compute nodes
+                          (default: '24:00:00' on daint, '08:00:00' on mistral)
+    --account ACCOUNT     account to use for batch script
+                          (default: infered from $PROJECT on daint, None on mistral)
+    --partition PARTITION
+                          select a queue (default: None)
+  
   daint:
     Options specific to the Piz Daint machine
   
-    --wall_time WALL_TIME
-                          reserved time on compute nodes (default: '24:00:00')
-    --account ACCOUNT     account to use for batch script (default: infered from $PROJECT)
-    --partition PARTITION
-                          select a queue (default: None)
     --modules_opt {switch,none,purge}
                           Option for loading modules at run time (default: 'switch')
-    --pgi_version {16.9.0,17.5.0,17.10.0}
+    --pgi_version {16.9.0,17.5.0,17.10.0, 18.5.0}
                           specify pgi compiler version at run time (default: None)
-    --login_shell LOGIN_SHELL
-                          DEACTIVATED
-                          Add the '-l' option to the submit script shebang.
-                          (type: bool, using anything Python can parse as a boolean,
-                          default: True)
+    --shebang SHEBANG     submit script shebang (default: '#!/usr/bin/env bash')
   
   cmd line:
     Options only avialble to the command line (no xml)
