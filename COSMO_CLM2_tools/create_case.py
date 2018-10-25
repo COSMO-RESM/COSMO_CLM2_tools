@@ -34,7 +34,7 @@ def create_case():
           "Command line arguments have precedence over xml file ones."
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
     main_group = parser.add_argument_group('main', 'Options common to all machines')
-    main_group.add_argument('--machine', metavar='MACH', choices=['daint'],
+    main_group.add_argument('--machine', metavar='MACH', choices=['daint', 'mistral'],
                             help="machine on which the case is running (default: has to be given \n"\
                             "either by the command line or the xml setup file)")
     main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
