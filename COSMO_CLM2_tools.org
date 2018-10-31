@@ -942,9 +942,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                                   help="machine on which the case is running (default: has to be given \n"\
                                   "either by the command line or the xml setup file)")
           main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
-          main_group.add_argument('--name', help="case name (default: 'COSMO_CLM2')")
+          main_group.add_argument('--name', help="case name (default: COSMO_CLM2)")
           main_group.add_argument('--path', help="directory where the case is set up (default: $SCRATCH/NAME on daint)")
-          main_group.add_argument('--cosmo_only', help="run only cosmo with build-in soil model TERRA (default: False)\n"\
+          main_group.add_argument('--cosmo_only', type=str_to_bool, help="run only cosmo with build-in soil model TERRA\n"\
+                                  "(type: bool, using anything Python can parse as a boolean, default: False)\n"\
                                   "Be carefull to provide a COSMO executable compiled accordingly")
           main_group.add_argument('--start_date', metavar='DATE_1',
                                   help="simulation start date formatted as YYYY-MM-DD-HH")
@@ -956,14 +957,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                                   "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'\n"\
                                   "N1, N2 and N3 being arbitrary integers (N2>12 possible) and\n"\
                                   "'y', 'm' and 'd' stand for year, month and day")
-          main_group.add_argument('--cos_in', help="COSMO input files directory (default: './COSMO_input')")
-          main_group.add_argument('--cos_nml', help="COSMO namelists directory (default: './COSMO_nml')")
-          main_group.add_argument('--cos_exe', help="path to COSMO executable (default: './cosmo')")
-          main_group.add_argument('--cesm_in', help="CESM input files directory (default: './CESM_input')")
-          main_group.add_argument('--cesm_nml', help="CESM namelists directory (default: './CESM_nml')")
-          main_group.add_argument('--cesm_exe', help="CESM executable (default: './cesm.exe')")
-          main_group.add_argument('--oas_in', help="OASIS input files directory (default: './OASIS_input')")
-          main_group.add_argument('--oas_nml', help="OASIS namelists directory (default: './OASIS_nml')")
+          main_group.add_argument('--cos_in', help="COSMO input files directory (default: ./COSMO_input)")
+          main_group.add_argument('--cos_nml', help="COSMO namelists directory (default: ./COSMO_nml)")
+          main_group.add_argument('--cos_exe', help="path to COSMO executable (default: ./cosmo)")
+          main_group.add_argument('--cesm_in', help="CESM input files directory (default: ./CESM_input)")
+          main_group.add_argument('--cesm_nml', help="CESM namelists directory (default: ./CESM_nml)")
+          main_group.add_argument('--cesm_exe', help="CESM executable (default: ./cesm.exe)")
+          main_group.add_argument('--oas_in', help="OASIS input files directory (default: ./OASIS_input)")
+          main_group.add_argument('--oas_nml', help="OASIS namelists directory (default: ./OASIS_nml)")
           main_group.add_argument('--ncosx', type=int, help="number of subdomains along the 'x-axis'\n"\
                                   "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
           main_group.add_argument('--ncosy', type=int, help="number of subdomains along the 'y-axis'\n"\
@@ -988,10 +989,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
           daint_group.add_argument('--modules_opt', choices=['switch', 'none', 'purge'],
-                                   help="Option for loading modules at run time (default: 'switch')")
+                                   help="Option for loading modules at run time (default: switch)")
           daint_group.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0, 18.5.0'],
                                    help="specify pgi compiler version at run time (default: None)")
-          daint_group.add_argument('--shebang', help="submit script shebang (default: '#!/usr/bin/env bash')")
+          daint_group.add_argument('--shebang', help="submit script shebang (default: #!/usr/bin/env bash)")
 
           cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
           cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
