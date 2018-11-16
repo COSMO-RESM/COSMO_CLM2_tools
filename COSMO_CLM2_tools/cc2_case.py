@@ -428,7 +428,7 @@ class daint_case(cc2_case):
         self.pgi_version = pgi_version
         self.shebang = shebang
         self.partition = partition
-        base_case.__init__(self, **base_case_args)
+        cc2_case.__init__(self, **base_case_args)
 
     @property
     def account(self):
@@ -516,14 +516,14 @@ class daint_case(cc2_case):
         # -------------------------------
         fd = os.open(os.path.join(self.path, 'cosmo.bash'), os.O_WRONLY | os.O_CREAT, 0o755)
         with os.fdopen(fd, 'w') as cosmo_bash:
-            cosmo_bash.write("#!/bin/bash")
-            cosmo_bash.write("export MPICH_RDMA_ENABLED_CUDA={:1d}".format(self.gpu_mode))
+            cosmo_bash.write("#!/bin/bash\n")
+            cosmo_bash.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
             cosmo_bash.write("./{:s}".format(self.COSMO_exe))
         if not self.cosmo_only:
             fd = os.open(os.path.join(self.path, 'cesm.bash'), os.O_WRONLY | os.O_CREAT, 0o755)
             with os.fdopen(fd, 'w') as cesm_bash:
-                cesm_bash.write("#!/bin/bash")
-                cesm_bash.write("export MPICH_RDMA_ENABLED_CUDA=0")
+                cesm_bash.write("#!/bin/bash\n")
+                cesm_bash.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
                 cesm_bash.write("./{:s}".format(self.COSMO_exe))
 
 
@@ -598,7 +598,7 @@ class mistral_case(cc2_case):
         self.wall_time = wall_time
         self.account = account
         self.partition = partition
-        base_case.__init__(self, **base_case_args)
+        cc2_case.__init__(self, **base_case_args)
         if self.gpu_mode:
             raise NotImplementedError("gpu mode not implemented for " + self.__class__.__name__)
 

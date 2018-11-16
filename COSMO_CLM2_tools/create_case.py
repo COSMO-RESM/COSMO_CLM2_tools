@@ -205,7 +205,7 @@ def create_case():
         raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
     case_args.update(machine_args)
     # create case instance
-    cc2case = cc2_case_factory(machine, **case_args)
+    cc2case = cc2_case_factory(opts.machine, **case_args)
 
     # Change/delete namelists parameters following xml file
     # =====================================================
