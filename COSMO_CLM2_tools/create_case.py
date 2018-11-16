@@ -1,6 +1,5 @@
 from __future__ import print_function
-from .daint_case import daint_case
-from .mistral_case import mistral_case
+from .cc2_case import factory as cc2_case_factory, available_cases
 from .date_formats import date_fmt_in, date_fmt_cosmo
 from subprocess import check_call
 from argparse import ArgumentParser, RawTextHelpFormatter
@@ -105,7 +104,6 @@ def create_case():
 
     # Set options to xml value if needed or default if nothing provided then perform some checks
     # ------------------------------------------------------------------------------------------
-    valid_machines = ['daint', 'mistral']
     # options defaults
     defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None,
                          'cosmo_only': False, 'gen_oasis': False,
@@ -130,8 +128,8 @@ def create_case():
     # Check machine
     if opts.machine is None:
         raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
-    elif opts.machine not in valid_machines:
-        raise ValueError("invalid 'machine' option. Has to be either of " + str(valid_machines))
+    elif opts.machine not in available_cases:
+        raise ValueError("invalid 'machine' option. Has to be either of " + str(list(available_cases.keys())))
 
     # Apply default machine specific options
     if opts.machine not in defaults:
@@ -145,6 +143,7 @@ def create_case():
         apply_defaults(opts, xml_node, defaults[opts.machine])
 
     # Check case path
+    # - ML - that will go to the daint_case class as soon as cleaner defaults are implemented
     if opts.path is None:
         if opts.machine == 'daint':
             opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
@@ -186,6 +185,7 @@ def create_case():
 
     # Create case instance
     # ====================
+    # base arguments
     case_args = {'name': opts.name, 'path': opts.path,
                  'cosmo_only': opts.cosmo_only, 'gen_oasis': opts.gen_oasis,
                  'start_date': opts.start_date, 'end_date': opts.end_date,
@@ -193,20 +193,19 @@ def create_case():
                  'CESM_exe': os.path.basename(opts.cesm_exe), 'ncosx': opts.ncosx,
                  'ncosy': opts.ncosy, 'ncosio': opts.ncosio, 'ncesm': opts.ncesm,
                  'gpu_mode': opts.gpu_mode, 'dummy_day': opts.dummy_day}
+    # machine specific arguments
     if opts.machine == 'daint':
-        case_class = daint_case
         machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
                         'partition': opts.partition,'modules_opt': opts.modules_opt,
                         'pgi_version': opts.pgi_version, 'shebang': opts.shebang}
-    elif opts.machine == 'daint':
-        case_class = mistral_case
+    elif opts.machine == 'mistral':
         machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
                         'partition': opts.partition}
     else:
         raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
-
     case_args.update(machine_args)
-    cc2case = case_class(**case_args)
+    # create case instance
+    cc2case = cc2_case_factory(machine, **case_args)
 
     # Change/delete namelists parameters following xml file
     # =====================================================

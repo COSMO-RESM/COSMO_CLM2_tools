@@ -177,9 +177,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations
        -->
      </setup>
    #+END_SRC
-** base_case.py
+** cc2_case.py
    :PROPERTIES:
-   :header-args: :tangle COSMO_CLM2_tools/base_case.py :comments no
+   :header-args: :tangle COSMO_CLM2_tools/cc2_case.py :comments no
    :END:
 *** preamble
     #+BEGIN_SRC python
@@ -198,13 +198,22 @@ Tools for automated creation and run of COSMO_CLM2 simulations
       import time
       import sys
       from warnings import warn
-    #+END_SRC
 
-*** base case class
+      available_cases = {}
+    #+END_SRC
+*** case factory function
+    #+BEGIN_SRC python
+      def factory(machine, **kwargs):
+          if machine not in available_cases:
+              raise ValueError("machine {:s} not available".format(machine))
+          else:
+              return available_cases[machine](**kwargs)
+    #+END_SRC
+*** cc2_case (base) class
     - [ ] Add option for "user defined" batch script. Not full freedom
       can be given, still need to use =cc2_control_case=
     #+BEGIN_SRC python
-      class base_case(object):
+      class cc2_case(object):
           """Base class defining a COSMO-CLM2 case"""
 
           _n_tasks_per_node = None
@@ -239,7 +248,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
               self.write_open_nml()   # Nothing requires changing namelists after that
               # Create batch script
-              self._build_controller()
+              if self._run_start_date == self._start_date:
+                  self._build_controller()
               # Create missing directories
               self._create_missing_dirs()
 
@@ -527,8 +537,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           def set_next_run(self):
               if ((self._run_start_date >= self._end_date) or
                   (self._run_end_date == self._end_date and not self.dummy_day)):
-                  return False
+                  continue_run = False
               else:
+                  continue_run = True
                   hstart = (self._run_end_date - self._start_date).total_seconds() // 3600.0
                   self.nml['INPUT_ORG']['runctl']['hstart'] = hstart
                   if not self.cosmo_only:
@@ -542,7 +553,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                       self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'continue'
                   self.write_open_nml()
                   self._update_controller()
-                  return True
+
+              return continue_run
 
 
           def _update_controller(self):
@@ -587,6 +599,287 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
               raise NotImplementedError(NotImplementMessage.format('_submit_func(self)', self.__class__.__name__))
     #+END_SRC
+*** case decorator
+    #+BEGIN_SRC python
+      def available(cls):
+          available_cases[cls._target_machine] = cls
+          return cls
+    #+END_SRC
+
+*** daint_case class
+    #+BEGIN_SRC python
+      @available
+      class daint_case(cc2_case):
+          """Class defining a COSMO-CLM2 case on Piz Daint"""
+
+          _target_machine='daint'
+          _n_tasks_per_node = 12
+
+          def __init__(self, wall_time='24:00:00', account=None, partition=None,
+                       shebang='#!/usr/bin/env bash', modules_opt='switch', pgi_version=None,
+                       ,**base_case_args):
+              self.wall_time = wall_time
+              self.account = account
+              self.modules_opt = modules_opt
+              self.pgi_version = pgi_version
+              self.shebang = shebang
+              self.partition = partition
+              base_case.__init__(self, **base_case_args)
+
+          @property
+          def account(self):
+              return self._account
+          @account.setter
+          def account(self, acc):
+              if acc is None:
+                  # Guess from ${PROJECT} environment variable
+                  self._account = os.path.normpath(os.environ['PROJECT']).split(os.path.sep)[-2]
+              else:
+                  self._account = acc
+
+
+          def _build_proc_config(self):                
+              with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
+                  if self.gpu_mode:
+                      N = self._n_tasks_per_node
+                      line = ",".join([str(k*N) for k in range(self._n_nodes)])
+                      f.write("{:s} ./{:s}\n".format(line, self.COSMO_exe))
+                      if not self.cosmo_only:
+                          line = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
+                          f.write("{:s} ./{:s}\n".format(line, self.CESM_exe))
+                  else:
+                      f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
+                      if not self.cosmo_only:
+                          f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
+
+
+          def _build_controller(self):
+
+              # Build controller (master file)
+              # ------------------------------
+              logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
+                                                    self._run_start_date.strftime(date_fmt_cesm),
+                                                    self._run_end_date.strftime(date_fmt_cesm))
+              with open(os.path.join(self.path, 'controller'), mode='w') as script:
+                  # shebang
+                  script.write('{:s}\n\n'.format(self.shebang))
+
+                  # slurm options
+                  script.write('#SBATCH --constraint=gpu\n')
+                  script.write('#SBATCH --job-name={:s}\n'.format(self.name))
+                  script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
+                  script.write('#SBATCH --output={:s}\n'.format(logfile))
+                  script.write('#SBATCH --error={:s}\n'.format(logfile))
+                  script.write('#SBATCH --account={:s}\n'.format(self.account))
+                  script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
+                  script.write('#SBATCH --gres=gpu:1\n')
+                  if self.partition is not None:
+                      script.write('#SBATCH --partition={:s}\n'.format(self.partition))
+                  script.write('\n')
+
+                  # environment variables
+                  script.write('export MALLOC_MMAP_MAX_=0\n')
+                  script.write('export MALLOC_TRIM_THRESHOLD_=536870912\n')
+                  script.write('\n')
+                  script.write('# Set this to avoid segmentation faults\n')
+                  script.write('ulimit -s unlimited\n')
+                  script.write('ulimit -a\n')
+                  script.write('\n')
+                  script.write('export OMP_NUM_THREADS=1\n')
+                  if self.gpu_mode:
+                      script.write('\n')
+                      script.write('# Use for gpu mode\n')
+                      script.write('export MV2_ENABLE_AFFINITY=0\n')
+                      script.write('export MV2_USE_CUDA=1\n')
+                      script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
+                      script.write('export MPICH_G2G_PIPELINE=256\n')
+                  script.write('\n')
+
+                  # Modules
+                  if self.modules_opt != 'none':
+                      # pgi programing environment
+                      if self.modules_opt == 'purge':
+                          script.write('module purge\n')
+                          script.write('module load PrgEnv-pgi\n')
+                      elif self.modules_opt == 'switch':
+                          script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
+                      # pgi version
+                      if self.pgi_version is not None:
+                          script.write('module unload pgi\n')
+                          if self.pgi_version == '17.10.0':
+                              script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
+                              script.write('module load pgi/17.10\n')
+                              script.write('export PGI_VERS_STR=17.10.0\n')
+                          else:
+                              script.write('module load pgi/{:s}\n'.format(self.pgi_version))
+
+                      # other modules
+                      script.write('module load daint-gpu\n')
+                      script.write('module load cray-netcdf\n')
+                      if self.gpu_mode:
+                          script.write('module load craype-accel-nvidia60\n')    
+                      script.write('\n')
+
+                  # launch case
+                  script.write('cc2_control_case ./config.xml\n')
+
+
+              # Build COSMO and CESM bash files
+              # -------------------------------
+              fd = os.open(os.path.join(self.path, 'cosmo.bash'), os.O_WRONLY | os.O_CREAT, 0o755)
+              with os.fdopen(fd, 'w') as cosmo_bash:
+                  cosmo_bash.write("#!/bin/bash")
+                  cosmo_bash.write("export MPICH_RDMA_ENABLED_CUDA={:1d}".format(self.gpu_mode))
+                  cosmo_bash.write("./{:s}".format(self.COSMO_exe))
+              if not self.cosmo_only:
+                  fd = os.open(os.path.join(self.path, 'cesm.bash'), os.O_WRONLY | os.O_CREAT, 0o755)
+                  with os.fdopen(fd, 'w') as cesm_bash:
+                      cesm_bash.write("#!/bin/bash")
+                      cesm_bash.write("export MPICH_RDMA_ENABLED_CUDA=0")
+                      cesm_bash.write("./{:s}".format(self.COSMO_exe))
+
+
+          def _update_controller(self):
+              logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
+                                                    self._run_start_date.strftime(date_fmt_cesm),
+                                                    self._run_end_date.strftime(date_fmt_cesm))
+              rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
+                       '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
+              with open(os.path.join(self.path, 'controller'), mode='r+') as f:
+                  content = f.read()
+                  for pattern, repl in rules.items():
+                      content = re.sub(pattern, repl, content, flags=re.MULTILINE)
+                  f.seek(0)
+                  f.write(content)
+                  f.truncate()
+
+
+          def _update_xml_config(self, config):
+              ET.SubElement(config, 'machine').text = 'daint'
+              ET.SubElement(config, 'account').text = self.account
+              ET.SubElement(config, 'wall_time').text = self.wall_time
+              ET.SubElement(config, 'partition').text = self.partition
+              ET.SubElement(config, 'modules_opt').text = self.modules_opt
+              ET.SubElement(config, 'pgi_version').text = self.pgi_version
+              ET.SubElement(config, 'shebang').text = str(self.shebang)
+
+
+          def _submit_func(self):
+              check_call(['sbatch', 'controller'])
+
+
+          def _run_func(self):
+              check_call(['module list'], shell=True)
+              if self.cosmo_only:
+                  if self.gpu_mode:
+                      run_cmd = 'srun -u --ntasks-per-node=1 -n {:d} {:s}'.format(self._n_nodes, self.COSMO_exe)
+                      # check_call(['srun', '-u', '--ntasks-per-node=1', '-n', str(self._n_nodes), self.COSMO_exe])
+                  else:
+                      run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.COSMO_exe)
+                      # check_call(['srun', '-u', '-n', str(self._n_nodes * self._n_tasks_per_node), self.COSMO_exe])
+              else:
+                  self._build_proc_config()
+                  run_cmd = 'srun -u --multi-prog ./proc_config'
+              print("running " + run_cmd)
+              sys.stdout.flush()
+              check_call(run_cmd, shell=True)
+    #+END_SRC
+
+*** mistral_case class
+    #+BEGIN_SRC python
+      @available
+      class mistral_case(cc2_case):
+          """Class defining a COSMO-CLM2 case on Mistral"""
+
+          _target_machine='mistral'
+          _n_tasks_per_node = 24
+
+          def __init__(self, wall_time='08:00:00', account=None, partition=None,
+                       ,**base_case_args):
+              self.wall_time = wall_time
+              self.account = account
+              self.partition = partition
+              base_case.__init__(self, **base_case_args)
+              if self.gpu_mode:
+                  raise NotImplementedError("gpu mode not implemented for " + self.__class__.__name__)
+
+
+          def _build_proc_config(self):
+              with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
+                  f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
+                  if not self.cosmo_only:
+                      f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
+
+
+          def _build_controller(self):
+              logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
+                                                    self._run_start_date.strftime(date_fmt_cesm),
+                                                    self._run_end_date.strftime(date_fmt_cesm))
+              with open(os.path.join(self.path, 'controller'), mode='w') as script:
+                  # shebang
+                  script.write('#!/usr/bin/env bash\n')
+
+                  # slurm options
+                  script.write('#SBATCH --job-name={:s}\n'.format(self.name))
+                  script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
+                  script.write('#SBATCH --output={:s}\n'.format(logfile))
+                  script.write('#SBATCH --error={:s}\n'.format(logfile))
+                  script.write('#SBATCH --account={:s}\n'.format(self.account))
+                  script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
+                  if self.partition is not None:
+                      script.write('#SBATCH --partition={:s}\n'.format(self.partition))
+                  script.write('\n')
+
+                  # environment variables
+                  script.write('export LD_LIBRARY_PATH=/sw/rhel6-x64/netcdf/netcdf_fortran-4.4.3-parallel-openmpi2-intel14/lib/:/sw/rhel6-x64/netcdf/parallel_netcdf-1.6.1-openmpi2-intel14/lib\n')
+                  script.write('\n')
+                  script.write('# Set this to avoid segmentation faults\n')
+                  script.write('ulimit -s unlimited\n')
+                  script.write('ulimit -a\n')
+                  script.write('\n')
+                  script.write('export OMP_NUM_THREADS=1\n')
+                  script.write('\n')
+
+                  # launch case
+                  script.write('cc2_control_case ./config.xml\n')
+
+
+          def _update_controller(self):
+              logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
+                                                    self._run_start_date.strftime(date_fmt_cesm),
+                                                    self._run_end_date.strftime(date_fmt_cesm))
+              rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
+                       '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
+              with open(os.path.join(self.path, 'controller'), mode='r+') as f:
+                  content = f.read()
+                  for pattern, repl in rules.items():
+                      content = re.sub(pattern, repl, content, flags=re.MULTILINE)
+                  f.seek(0)
+                  f.write(content)
+                  f.truncate()
+
+
+          def _update_xml_config(self, config):
+              ET.SubElement(config, 'machine').text = 'mistral'
+              ET.SubElement(config, 'account').text = self.account
+              ET.SubElement(config, 'wall_time').text = self.wall_time
+              ET.SubElement(config, 'partition').text = self.partition
+
+
+          def _submit_func(self):
+              check_call(['sbatch', 'controller', './config.xml'])
+
+
+          def _run_func(self):
+              if self.cosmo_only:
+                  run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.COSMO_exe)
+              else:
+                  self._build_proc_config()
+                  run_cmd = 'srun -u --multi-prog ./proc_config'
+              print("running " + run_cmd)
+              sys.stdout.flush()
+              check_call(run_cmd, shell=True)
+    #+END_SRC
 *** nmldict class
     #+BEGIN_SRC python
       class nmldict(dict):
@@ -608,278 +901,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   self.write(name)
     #+END_SRC
 
-** daint_case.py
-   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/daint_case.py :comments no
-     from __future__ import print_function
-     from .base_case import base_case
-     from .date_formats import date_fmt_in, date_fmt_cosmo, date_fmt_cesm
-     from subprocess import check_call
-     import os
-     import re
-     import xml.etree.ElementTree as ET
-     import sys
-
-
-     class daint_case(base_case):
-         """Class defining a COSMO-CLM2 case on Piz Daint"""
-
-         _n_tasks_per_node = 12
-
-         def __init__(self, wall_time='24:00:00', account=None, partition=None,
-                      shebang='#!/usr/bin/env bash', modules_opt='switch', pgi_version=None,
-                      ,**base_case_args):
-             self.wall_time = wall_time
-             self.account = account
-             self.modules_opt = modules_opt
-             self.pgi_version = pgi_version
-             self.shebang = shebang
-             self.partition = partition
-             base_case.__init__(self, **base_case_args)
-
-         @property
-         def account(self):
-             return self._account
-         @account.setter
-         def account(self, acc):
-             if acc is None:
-                 # Guess from ${PROJECT} environment variable
-                 self._account = os.path.normpath(os.environ['PROJECT']).split(os.path.sep)[-2]
-             else:
-                 self._account = acc
-
-
-         def _build_proc_config(self):
-             with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
-                 if self.gpu_mode:
-                     N = self._n_tasks_per_node
-                     line = ",".join([str(k*N) for k in range(self._n_nodes)])
-                     f.write("{:s} ./{:s}\n".format(line, self.COSMO_exe))
-                     if not self.cosmo_only:
-                         line = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
-                         f.write("{:s} ./{:s}\n".format(line, self.CESM_exe))
-                 else:
-                     f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
-                     if not self.cosmo_only:
-                         f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
-
-
-         def _build_controller(self):
-             logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                   self._run_start_date.strftime(date_fmt_cesm),
-                                                   self._run_end_date.strftime(date_fmt_cesm))
-             with open(os.path.join(self.path, 'controller'), mode='w') as script:
-                 # shebang
-                 script.write('{:s}\n\n'.format(self.shebang))
-
-                 # slurm options
-                 script.write('#SBATCH --constraint=gpu\n')
-                 script.write('#SBATCH --job-name={:s}\n'.format(self.name))
-                 script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
-                 script.write('#SBATCH --output={:s}\n'.format(logfile))
-                 script.write('#SBATCH --error={:s}\n'.format(logfile))
-                 script.write('#SBATCH --account={:s}\n'.format(self.account))
-                 script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
-                 script.write('#SBATCH --gres=gpu:1\n')
-                 if self.partition is not None:
-                     script.write('#SBATCH --partition={:s}\n'.format(self.partition))
-                 script.write('\n')
-
-                 # environment variables
-                 script.write('export MALLOC_MMAP_MAX_=0\n')
-                 script.write('export MALLOC_TRIM_THRESHOLD_=536870912\n')
-                 script.write('\n')
-                 script.write('# Set this to avoid segmentation faults\n')
-                 script.write('ulimit -s unlimited\n')
-                 script.write('ulimit -a\n')
-                 script.write('\n')
-                 script.write('export OMP_NUM_THREADS=1\n')
-                 if self.gpu_mode:
-                     script.write('\n')
-                     script.write('# Use for gpu mode\n')
-                     script.write('export MV2_ENABLE_AFFINITY=0\n')
-                     script.write('export MV2_USE_CUDA=1\n')
-                     script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
-                     script.write('export MPICH_G2G_PIPELINE=256\n')
-                 script.write('\n')
-
-                 # Modules
-                 if self.modules_opt != 'none':
-                     # pgi programing environment
-                     if self.modules_opt == 'purge':
-                         script.write('module purge\n')
-                         script.write('module load PrgEnv-pgi\n')
-                     elif self.modules_opt == 'switch':
-                         script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
-                     # pgi version
-                     if self.pgi_version is not None:
-                         script.write('module unload pgi\n')
-                         if self.pgi_version == '17.10.0':
-                             script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
-                             script.write('module load pgi/17.10\n')
-                             script.write('export PGI_VERS_STR=17.10.0\n')
-                         else:
-                             script.write('module load pgi/{:s}\n'.format(self.pgi_version))
-
-                     # other modules
-                     script.write('module load daint-gpu\n')
-                     script.write('module load cray-netcdf\n')
-                     if self.gpu_mode:
-                         script.write('module load craype-accel-nvidia60\n')    
-                     script.write('\n')
-
-                 # launch case
-                 script.write('cc2_control_case ./config.xml\n')
-
-
-         def _update_controller(self):
-             logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                   self._run_start_date.strftime(date_fmt_cesm),
-                                                   self._run_end_date.strftime(date_fmt_cesm))
-             rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
-                      '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
-             with open(os.path.join(self.path, 'controller'), mode='r+') as f:
-                 content = f.read()
-                 for pattern, repl in rules.items():
-                     content = re.sub(pattern, repl, content, flags=re.MULTILINE)
-                 f.seek(0)
-                 f.write(content)
-                 f.truncate()
-
-
-         def _update_xml_config(self, config):
-             ET.SubElement(config, 'machine').text = 'daint'
-             ET.SubElement(config, 'account').text = self.account
-             ET.SubElement(config, 'wall_time').text = self.wall_time
-             ET.SubElement(config, 'partition').text = self.partition
-             ET.SubElement(config, 'modules_opt').text = self.modules_opt
-             ET.SubElement(config, 'pgi_version').text = self.pgi_version
-             ET.SubElement(config, 'shebang').text = str(self.shebang)
-
-
-         def _submit_func(self):
-             check_call(['sbatch', 'controller'])
-
-
-         def _run_func(self):
-             check_call(['module list'], shell=True)
-             if self.cosmo_only:
-                 if self.gpu_mode:
-                     run_cmd = 'srun -u --ntasks-per-node=1 -n {:d} {:s}'.format(self._n_nodes, self.COSMO_exe)
-                     # check_call(['srun', '-u', '--ntasks-per-node=1', '-n', str(self._n_nodes), self.COSMO_exe])
-                 else:
-                     run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.COSMO_exe)
-                     # check_call(['srun', '-u', '-n', str(self._n_nodes * self._n_tasks_per_node), self.COSMO_exe])
-             else:
-                 self._build_proc_config()
-                 run_cmd = 'srun -u --multi-prog ./proc_config'
-             print("running " + run_cmd)
-             sys.stdout.flush()
-             check_call(run_cmd, shell=True)
-   #+END_SRC
-
-** mistral_case.py
-   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/mistral_case.py :comments no
-     from __future__ import print_function
-     from .base_case import base_case
-     from .date_formats import date_fmt_in, date_fmt_cosmo, date_fmt_cesm
-     from subprocess import check_call
-     import os
-     import re
-     import xml.etree.ElementTree as ET
-     import sys
-
-
-     class mistral_case(base_case):
-         """Class defining a COSMO-CLM2 case on Mistral"""
-
-         _n_tasks_per_node = 24
-
-         def __init__(self, wall_time='08:00:00', account=None, partition=None,
-                      ,**base_case_args):
-             self.wall_time = wall_time
-             self.account = account
-             self.partition = partition
-             base_case.__init__(self, **base_case_args)
-             if self.gpu_mode:
-                 raise NotImplementedError("gpu mode not implemented for " + self.__class__.__name__)
-
-
-         def _build_proc_config(self):
-             with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
-                 f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
-                 if not self.cosmo_only:
-                     f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
-
-
-         def _build_controller(self):
-             logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                   self._run_start_date.strftime(date_fmt_cesm),
-                                                   self._run_end_date.strftime(date_fmt_cesm))
-             with open(os.path.join(self.path, 'controller'), mode='w') as script:
-                 # shebang
-                 script.write('#!/usr/bin/env bash\n')
-
-                 # slurm options
-                 script.write('#SBATCH --job-name={:s}\n'.format(self.name))
-                 script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
-                 script.write('#SBATCH --output={:s}\n'.format(logfile))
-                 script.write('#SBATCH --error={:s}\n'.format(logfile))
-                 script.write('#SBATCH --account={:s}\n'.format(self.account))
-                 script.write('#SBATCH --time={:s}\n'.format(self.wall_time))
-                 if self.partition is not None:
-                     script.write('#SBATCH --partition={:s}\n'.format(self.partition))
-                 script.write('\n')
-
-                 # environment variables
-                 script.write('export LD_LIBRARY_PATH=/sw/rhel6-x64/netcdf/netcdf_fortran-4.4.3-parallel-openmpi2-intel14/lib/:/sw/rhel6-x64/netcdf/parallel_netcdf-1.6.1-openmpi2-intel14/lib\n')
-                 script.write('\n')
-                 script.write('# Set this to avoid segmentation faults\n')
-                 script.write('ulimit -s unlimited\n')
-                 script.write('ulimit -a\n')
-                 script.write('\n')
-                 script.write('export OMP_NUM_THREADS=1\n')
-                 script.write('\n')
-
-                 # launch case
-                 script.write('cc2_control_case ./config.xml\n')
-
-
-         def _update_controller(self):
-             logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                   self._run_start_date.strftime(date_fmt_cesm),
-                                                   self._run_end_date.strftime(date_fmt_cesm))
-             rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
-                      '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
-             with open(os.path.join(self.path, 'controller'), mode='r+') as f:
-                 content = f.read()
-                 for pattern, repl in rules.items():
-                     content = re.sub(pattern, repl, content, flags=re.MULTILINE)
-                 f.seek(0)
-                 f.write(content)
-                 f.truncate()
-
-
-         def _update_xml_config(self, config):
-             ET.SubElement(config, 'machine').text = 'mistral'
-             ET.SubElement(config, 'account').text = self.account
-             ET.SubElement(config, 'wall_time').text = self.wall_time
-             ET.SubElement(config, 'partition').text = self.partition
-
-
-         def _submit_func(self):
-             check_call(['sbatch', 'controller', './config.xml'])
-
-
-         def _run_func(self):
-             if self.cosmo_only:
-                 run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.COSMO_exe)
-             else:
-                 self._build_proc_config()
-                 run_cmd = 'srun -u --multi-prog ./proc_config'
-             print("running " + run_cmd)
-             sys.stdout.flush()
-             check_call(run_cmd, shell=True)
-   #+END_SRC
 ** create_case.py
    :PROPERTIES:
    :header-args: :tangle COSMO_CLM2_tools/create_case.py :comments no
@@ -887,8 +908,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 *** preamble
     #+BEGIN_SRC python
       from __future__ import print_function
-      from .daint_case import daint_case
-      from .mistral_case import mistral_case
+      from .cc2_case import factory as cc2_case_factory, available_cases
       from .date_formats import date_fmt_in, date_fmt_cosmo
       from subprocess import check_call
       from argparse import ArgumentParser, RawTextHelpFormatter
@@ -1009,7 +1029,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           # Set options to xml value if needed or default if nothing provided then perform some checks
           # ------------------------------------------------------------------------------------------
-          valid_machines = ['daint', 'mistral']
           # options defaults
           defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None,
                                'cosmo_only': False, 'gen_oasis': False,
@@ -1034,8 +1053,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           # Check machine
           if opts.machine is None:
               raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
-          elif opts.machine not in valid_machines:
-              raise ValueError("invalid 'machine' option. Has to be either of " + str(valid_machines))
+          elif opts.machine not in available_cases:
+              raise ValueError("invalid 'machine' option. Has to be either of " + str(list(available_cases.keys())))
 
           # Apply default machine specific options
           if opts.machine not in defaults:
@@ -1049,6 +1068,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               apply_defaults(opts, xml_node, defaults[opts.machine])
 
           # Check case path
+          # - ML - that will go to the daint_case class as soon as cleaner defaults are implemented
           if opts.path is None:
               if opts.machine == 'daint':
                   opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
@@ -1090,6 +1110,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           # Create case instance
           # ====================
+          # base arguments
           case_args = {'name': opts.name, 'path': opts.path,
                        'cosmo_only': opts.cosmo_only, 'gen_oasis': opts.gen_oasis,
                        'start_date': opts.start_date, 'end_date': opts.end_date,
@@ -1097,20 +1118,19 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                        'CESM_exe': os.path.basename(opts.cesm_exe), 'ncosx': opts.ncosx,
                        'ncosy': opts.ncosy, 'ncosio': opts.ncosio, 'ncesm': opts.ncesm,
                        'gpu_mode': opts.gpu_mode, 'dummy_day': opts.dummy_day}
+          # machine specific arguments
           if opts.machine == 'daint':
-              case_class = daint_case
               machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
                               'partition': opts.partition,'modules_opt': opts.modules_opt,
                               'pgi_version': opts.pgi_version, 'shebang': opts.shebang}
-          elif opts.machine == 'daint':
-              case_class = mistral_case
+          elif opts.machine == 'mistral':
               machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
                               'partition': opts.partition}
           else:
               raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
-
           case_args.update(machine_args)
-          cc2case = case_class(**case_args)
+          # create case instance
+          cc2case = cc2_case_factory(machine, **case_args)
 
           # Change/delete namelists parameters following xml file
           # =====================================================
@@ -1308,8 +1328,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations
     #+END_SRC
 
 ** control_case.py
+   - [ ] The xml part of it could go to a bla_from_xml factory function
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/control_case.py :comments no
-     from .daint_case import daint_case
+     from .cc2_case import factory as cc2_case_factory
      from argparse import ArgumentParser, RawTextHelpFormatter
      import xml.etree.ElementTree as ET
 
@@ -1342,12 +1363,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                          args[opt.tag] = opt_type(opt.text)
                      else:
                          raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
-                                          + " has to be a valid python or 'py_eval'")
+                                          + " has to be a valid python type or 'py_eval'")
 
-         if machine == 'daint':
-             cc2case = daint_case(**args)
-         else:
-             raise NotImplementedError("machine {:s} not implemeted".format(machine))
+
+         cc2case = cc2_case_factory(machine, **args)
 
          # Run
          cc2case.run()

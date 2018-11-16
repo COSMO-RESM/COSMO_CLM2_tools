@@ -1,4 +1,4 @@
-from .daint_case import daint_case
+from .cc2_case import factory as cc2_case_factory
 from argparse import ArgumentParser, RawTextHelpFormatter
 import xml.etree.ElementTree as ET
 
@@ -31,12 +31,10 @@ def control_case():
                     args[opt.tag] = opt_type(opt.text)
                 else:
                     raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
-                                     + " has to be a valid python or 'py_eval'")
+                                     + " has to be a valid python type or 'py_eval'")
 
-    if machine == 'daint':
-        cc2case = daint_case(**args)
-    else:
-        raise NotImplementedError("machine {:s} not implemeted".format(machine))
+
+    cc2case = cc2_case_factory(machine, **args)
 
     # Run
     cc2case.run()
