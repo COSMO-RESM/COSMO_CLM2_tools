@@ -638,21 +638,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   self._account = acc
 
 
-          def _build_proc_config(self):                
-              with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
-                  if self.gpu_mode:
-                      N = self._n_tasks_per_node
-                      line = ",".join([str(k*N) for k in range(self._n_nodes)])
-                      f.write("{:s} ./{:s}\n".format(line, self.COSMO_exe))
-                      if not self.cosmo_only:
-                          line = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
-                          f.write("{:s} ./{:s}\n".format(line, self.CESM_exe))
-                  else:
-                      f.write('{:d}-{:d} ./{:s}\n'.format(0, self._ncos-1, self.COSMO_exe))
-                      if not self.cosmo_only:
-                          f.write('{:d}-{:d} ./{:s}\n'.format(self._ncos, self._ncos+self._ncesm-1, self.CESM_exe))
-
-
           def _build_controller(self):
 
               # Build controller (master file)
@@ -691,7 +676,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                       script.write('# Use for gpu mode\n')
                       script.write('export MV2_ENABLE_AFFINITY=0\n')
                       script.write('export MV2_USE_CUDA=1\n')
-                      script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
                       script.write('export MPICH_G2G_PIPELINE=256\n')
                   script.write('\n')
 
@@ -769,20 +753,34 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
 
           def _run_func(self):
-              check_call(['module list'], shell=True)
+              # Determine run command
               if self.cosmo_only:
                   if self.gpu_mode:
                       run_cmd = 'srun -u --ntasks-per-node=1 -n {:d} {:s}'.format(self._n_nodes, self.COSMO_exe)
-                      # check_call(['srun', '-u', '--ntasks-per-node=1', '-n', str(self._n_nodes), self.COSMO_exe])
                   else:
                       run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.COSMO_exe)
-                      # check_call(['srun', '-u', '-n', str(self._n_nodes * self._n_tasks_per_node), self.COSMO_exe])
               else:
                   self._build_proc_config()
                   run_cmd = 'srun -u --multi-prog ./proc_config'
+
+              # Run
+              check_call(['module list'], shell=True)
               print("running " + run_cmd)
               sys.stdout.flush()
               check_call(run_cmd, shell=True)
+
+
+          def _build_proc_config(self):
+              with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
+                  if self.gpu_mode:
+                      N = self._n_tasks_per_node
+                      tasks = ",".join([str(k*N) for k in range(self._n_nodes)])
+                      f.write("{:s} ./cosmo.bash\n".format(tasks))
+                      tasks = ",".join(["{:d}-{:d}".format(k*N+1,(k+1)*N-1) for k in range(self._n_nodes)])
+                      f.write("{:s} ./cesm.bash".format(tasks))
+                  else:
+                      f.write('{:d}-{:d} ./cosmo.bash\n'.format(0, self._ncos-1))
+                      f.write('{:d}-{:d} ./cesm.bash'.format(self._ncos, self._ncos+self._ncesm-1))
     #+END_SRC
 
 *** mistral_case class
