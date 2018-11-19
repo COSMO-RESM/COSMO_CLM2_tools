@@ -524,7 +524,7 @@ class daint_case(cc2_case):
             with os.fdopen(fd, 'w') as cesm_bash:
                 cesm_bash.write("#!/bin/bash\n")
                 cesm_bash.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
-                cesm_bash.write("./{:s}".format(self.COSMO_exe))
+                cesm_bash.write("./{:s}".format(self.CESM_exe))
 
 
     def _update_controller(self):
