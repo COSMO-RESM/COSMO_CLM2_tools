@@ -710,17 +710,19 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
               # Build COSMO and CESM bash files
               # -------------------------------
-              fd = os.open(os.path.join(self.path, 'cosmo.bash'), os.O_WRONLY | os.O_CREAT, 0o755)
-              with os.fdopen(fd, 'w') as cosmo_bash:
-                  cosmo_bash.write("#!/bin/bash\n")
-                  cosmo_bash.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
-                  cosmo_bash.write("./{:s}".format(self.COSMO_exe))
+              f_path = os.path.join(self.path, 'cosmo.bash')
+              with open(f_path, 'w') as f:
+                  f.write("#!/bin/bash\n")
+                  f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
+                  f.write("./{:s}".format(self.COSMO_exe))
+              os.chmod(f_path, 0o755)
               if not self.cosmo_only:
-                  fd = os.open(os.path.join(self.path, 'cesm.bash'), os.O_WRONLY | os.O_CREAT, 0o755)
-                  with os.fdopen(fd, 'w') as cesm_bash:
-                      cesm_bash.write("#!/bin/bash\n")
-                      cesm_bash.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
-                      cesm_bash.write("./{:s}".format(self.CESM_exe))
+                  f_path = os.path.join(self.path, 'cesm.bash')
+                  with open(f_path, 'w') as f:
+                      f.write("#!/bin/bash\n")
+                      f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
+                      f.write("./{:s}".format(self.CESM_exe))
+                  os.chmod(f_path, 0o755)
 
 
           def _update_controller(self):
