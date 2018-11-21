@@ -117,7 +117,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 * COSMO_CLM2_tools                                                 :noexport:
   - [ ] Add doc strings
 ** default_setup.xml
-   #+BEGIN_SRC xml :tangle COSMO_CLM2_tools/default_setup.xml
+   #+BEGIN_SRC nxml :tangle COSMO_CLM2_tools/default_setup.xml
      <?xml version="1.0" encoding="utf-8"?>
      <setup>
        <!-- main and machine specific options can also be set through the command line.
