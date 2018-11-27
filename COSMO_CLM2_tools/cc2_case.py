@@ -444,8 +444,6 @@ class daint_case(cc2_case):
 
     def _build_controller(self):
 
-        # Build controller (master file)
-        # ------------------------------
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
                                               self._run_start_date.strftime(date_fmt_cesm),
                                               self._run_end_date.strftime(date_fmt_cesm))
@@ -481,6 +479,8 @@ class daint_case(cc2_case):
                 script.write('export MV2_ENABLE_AFFINITY=0\n')
                 script.write('export MV2_USE_CUDA=1\n')
                 script.write('export MPICH_G2G_PIPELINE=256\n')
+                if self.cosmo_only:
+                    script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
             script.write('\n')
 
             # Modules
@@ -510,23 +510,6 @@ class daint_case(cc2_case):
 
             # launch case
             script.write('cc2_control_case ./config.xml\n')
-
-
-        # Build COSMO and CESM bash files
-        # -------------------------------
-        f_path = os.path.join(self.path, 'cosmo.bash')
-        with open(f_path, 'w') as f:
-            f.write("#!/bin/bash\n")
-            f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
-            f.write("./{:s}".format(self.COSMO_exe))
-        os.chmod(f_path, 0o755)
-        if not self.cosmo_only:
-            f_path = os.path.join(self.path, 'cesm.bash')
-            with open(f_path, 'w') as f:
-                f.write("#!/bin/bash\n")
-                f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
-                f.write("./{:s}".format(self.CESM_exe))
-            os.chmod(f_path, 0o755)
 
 
     def _update_controller(self):
@@ -577,6 +560,21 @@ class daint_case(cc2_case):
 
 
     def _build_proc_config(self):
+        # Build executable bash files
+        f_path = os.path.join(self.path, 'cosmo.bash')
+        with open(f_path, 'w') as f:
+            f.write("#!/bin/bash\n")
+            f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
+            f.write("./{:s}".format(self.COSMO_exe))
+        os.chmod(f_path, 0o755)
+        f_path = os.path.join(self.path, 'cesm.bash')
+        with open(f_path, 'w') as f:
+            f.write("#!/bin/bash\n")
+            f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
+            f.write("./{:s}".format(self.CESM_exe))
+        os.chmod(f_path, 0o755)
+
+        # Build proc_config
         with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
             if self.gpu_mode:
                 N = self._n_tasks_per_node
