@@ -85,8 +85,7 @@ def create_case():
     daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
     daint_group.add_argument('--modules_opt', choices=['switch', 'none', 'purge'],
                              help="Option for loading modules at run time (default: switch)")
-    daint_group.add_argument('--pgi_version', choices=['16.9.0', '17.5.0', '17.10.0, 18.5.0'],
-                             help="specify pgi compiler version at run time (default: None)")
+    daint_group.add_argument('--pgi_version', help="specify pgi compiler version at run time (default: None)")
     daint_group.add_argument('--shebang', help="submit script shebang (default: #!/usr/bin/env bash)")
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
