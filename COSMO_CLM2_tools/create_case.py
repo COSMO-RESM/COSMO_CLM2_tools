@@ -179,7 +179,10 @@ def create_case():
             check_call(['rsync', '-avr', opts.oas_in+'/', opts.path])
         else:
             for f in os.listdir(opts.oas_in):
-                os.remove(os.path.join(opts.path, f))
+                try:
+                    os.remove(os.path.join(opts.path, f))
+                except OSError:
+                    pass
         check_call(['rsync', '-avr', opts.oas_nml+'/', opts.path])
 
     # Create case instance
