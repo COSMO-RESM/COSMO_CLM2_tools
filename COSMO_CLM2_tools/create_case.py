@@ -99,6 +99,7 @@ def create_case():
 
     opts = parser.parse_args()
     if opts.gen_oasis:
+        print('Generate OASIS input file: the code will crash after creating the files')
         opts.dummy_day = False
 
     # Set options to xml value if needed or default if nothing provided then perform some checks
@@ -178,8 +179,10 @@ def create_case():
         if not opts.gen_oasis:
             check_call(['rsync', '-avr', opts.oas_in+'/', opts.path])
         else:
+            print('generate OASIS file:')
             for f in os.listdir(opts.oas_in):
                 try:
+                    print('   removing ' +  os.path.join(opts.path, f))
                     os.remove(os.path.join(opts.path, f))
                 except OSError:
                     pass
