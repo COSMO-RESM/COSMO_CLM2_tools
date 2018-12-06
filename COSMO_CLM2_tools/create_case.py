@@ -170,14 +170,14 @@ def create_case():
     transfer_COSMO_input(opts.cos_in, opts.path+'/COSMO_input',
                          opts.start_date, opts.end_date,
                          opts.run_length, dh, opts.dummy_day, ext)
-    check_call(['rsync', '-avr', opts.cos_nml+'/', opts.path])
-    check_call(['rsync', '-avr', opts.cos_exe, opts.path])
+    check_call(['rsync', '-avrL', opts.cos_nml+'/', opts.path])
+    check_call(['rsync', '-avrL', opts.cos_exe, opts.path])
     if not opts.cosmo_only:
-        check_call(['rsync', '-avr', opts.cesm_in+'/', opts.path+'/CESM_input/'])
-        check_call(['rsync', '-avr', opts.cesm_nml+'/', opts.path])
-        check_call(['rsync', '-avr', opts.cesm_exe, opts.path])
+        check_call(['rsync', '-avrL', opts.cesm_in+'/', opts.path+'/CESM_input/'])
+        check_call(['rsync', '-avrL', opts.cesm_nml+'/', opts.path])
+        check_call(['rsync', '-avrL', opts.cesm_exe, opts.path])
         if not opts.gen_oasis:
-            check_call(['rsync', '-avr', opts.oas_in+'/', opts.path])
+            check_call(['rsync', '-avrL', opts.oas_in+'/', opts.path])
         else:
             print('generate OASIS file:')
             for f in os.listdir(opts.oas_in):
@@ -186,7 +186,7 @@ def create_case():
                     os.remove(os.path.join(opts.path, f))
                 except OSError:
                     pass
-        check_call(['rsync', '-avr', opts.oas_nml+'/', opts.path])
+        check_call(['rsync', '-avrL', opts.oas_nml+'/', opts.path])
 
     # Create case instance
     # ====================
