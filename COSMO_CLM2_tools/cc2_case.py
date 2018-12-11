@@ -212,6 +212,8 @@ class cc2_case(object):
         if not self.cosmo_only:
             drv_in = self.nml['drv_in']
         # adapt INPUT_ORG
+        if 'hstop' in INPUT_ORG['runctl']:
+            del INPUT_ORG['runctl']['hstop']
         INPUT_ORG['runctl']['nstop'] = int(hstop * 3600.0 // INPUT_ORG['runctl']['dt']) - 1
         # adapt INPUT_IO
         for gribout in self._get_gribouts():
