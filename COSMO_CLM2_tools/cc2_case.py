@@ -422,7 +422,7 @@ class daint_case(cc2_case):
     _n_tasks_per_node = 12
 
     def __init__(self, wall_time='24:00:00', account=None, partition=None,
-                 shebang='#!/usr/bin/env bash', modules_opt='switch', pgi_version=None,
+                 shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
                  **base_case_args):
         self.wall_time = wall_time
         self.account = account

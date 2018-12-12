@@ -31,8 +31,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                            [--wall_time WALL_TIME] [--account ACCOUNT]
                            [--partition PARTITION]
                            [--modules_opt {switch,none,purge}]
-                           [--pgi_version {16.9.0,17.5.0,17.10.0, 18.5.0}]
-                           [--shebang SHEBANG] [--no_submit] [--gen_oasis]
+                           [--pgi_version PGI_VERSION] [--shebang SHEBANG]
+                           [--no_submit] [--gen_oasis]
 
     Set up and run a COSMO_CLM2 case
     --------------------------------
@@ -47,14 +47,15 @@ Tools for automated creation and run of COSMO_CLM2 simulations
     main:
       Options common to all machines
 
-      --machine MACH        machine on which the case is running (default: has to be given
+      --machine MACH        machine on which the case is running (default: has to be given 
                             either by the command line or the xml setup file)
       -s FILE, --setup-file FILE
                             xml file conatining setup options
-      --name NAME           case name (default: 'COSMO_CLM2')
+      --name NAME           case name (default: COSMO_CLM2)
       --path PATH           directory where the case is set up (default: $SCRATCH/NAME on daint)
       --cosmo_only COSMO_ONLY
-                            run only cosmo with build-in soil model TERRA (default: False)
+                            run only cosmo with build-in soil model TERRA
+                            (type: bool, using anything Python can parse as a boolean, default: False)
                             Be carefull to provide a COSMO executable compiled accordingly
       --start_date DATE_1   simulation start date formatted as YYYY-MM-DD-HH
       --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
@@ -63,14 +64,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                             dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'
                             N1, N2 and N3 being arbitrary integers (N2>12 possible) and
                             'y', 'm' and 'd' stand for year, month and day
-      --cos_in COS_IN       COSMO input files directory (default: './COSMO_input')
-      --cos_nml COS_NML     COSMO namelists directory (default: './COSMO_nml')
-      --cos_exe COS_EXE     path to COSMO executable (default: './cosmo')
-      --cesm_in CESM_IN     CESM input files directory (default: './CESM_input')
-      --cesm_nml CESM_NML   CESM namelists directory (default: './CESM_nml')
-      --cesm_exe CESM_EXE   CESM executable (default: './cesm.exe')
-      --oas_in OAS_IN       OASIS input files directory (default: './OASIS_input')
-      --oas_nml OAS_NML     OASIS namelists directory (default: './OASIS_nml')
+      --cos_in COS_IN       COSMO input files directory (default: ./COSMO_input)
+      --cos_nml COS_NML     COSMO namelists directory (default: ./COSMO_nml)
+      --cos_exe COS_EXE     path to COSMO executable (default: ./cosmo)
+      --cesm_in CESM_IN     CESM input files directory (default: ./CESM_input)
+      --cesm_nml CESM_NML   CESM namelists directory (default: ./CESM_nml)
+      --cesm_exe CESM_EXE   CESM executable (default: ./cesm.exe)
+      --oas_in OAS_IN       OASIS input files directory (default: ./OASIS_input)
+      --oas_nml OAS_NML     OASIS namelists directory (default: ./OASIS_nml)
       --ncosx NCOSX         number of subdomains along the 'x-axis'
                             for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
       --ncosy NCOSY         number of subdomains along the 'y-axis'
@@ -100,10 +101,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
       Options specific to the Piz Daint machine
 
       --modules_opt {switch,none,purge}
-                            Option for loading modules at run time (default: 'switch')
-      --pgi_version {16.9.0,17.5.0,17.10.0, 18.5.0}
+                            Option for loading modules at run time (default: switch)
+      --pgi_version PGI_VERSION
                             specify pgi compiler version at run time (default: None)
-      --shebang SHEBANG     submit script shebang (default: '#!/usr/bin/env bash')
+      --shebang SHEBANG     submit script shebang (default: #!/bin/bash)
 
     cmd line:
       Options only avialble to the command line (no xml)
@@ -618,7 +619,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           _n_tasks_per_node = 12
 
           def __init__(self, wall_time='24:00:00', account=None, partition=None,
-                       shebang='#!/usr/bin/env bash', modules_opt='switch', pgi_version=None,
+                       shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
                        ,**base_case_args):
               self.wall_time = wall_time
               self.account = account
@@ -1011,7 +1012,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           daint_group.add_argument('--modules_opt', choices=['switch', 'none', 'purge'],
                                    help="Option for loading modules at run time (default: switch)")
           daint_group.add_argument('--pgi_version', help="specify pgi compiler version at run time (default: None)")
-          daint_group.add_argument('--shebang', help="submit script shebang (default: #!/usr/bin/env bash)")
+          daint_group.add_argument('--shebang', help="submit script shebang (default: #!/bin/bash)")
 
           cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
           cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
@@ -1039,7 +1040,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                                'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
                                'dummy_day': True, 'gpu_mode': False},
                       'daint': {'wall_time': '24:00:00', 'account': None, 'partition': None,
-                                'modules_opt': 'switch', 'pgi_version': None, 'shebang': '#!/usr/bin/env bash'},
+                                'modules_opt': 'switch', 'pgi_version': None, 'shebang': '#!/bin/bash'},
                       'mistral': {'wall_time': '08:00:00', 'account': None, 'partition': None}}
 
           # Apply default main options
