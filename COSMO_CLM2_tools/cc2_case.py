@@ -39,23 +39,24 @@ class cc2_case(object):
                  gpu_mode=False, dummy_day=True, cosmo_only=False,
                  gen_oasis=False):
 
+        self.cosmo_only = cosmo_only
         # Create namelists dictionnary
         self.nml = nmldict(self)
         # Set case name, install_dir and path
         self._name = name
         self.install_dir = install_dir   # also sets self._path
         # Install: transfer namelists, executables and input files
+        self.cos_in = os.path.abspath(cos_in)
         if install:
             log = 'Setting up case {:s} in {:s}'.format(self._name, self._path)
             print(log + '\n' + '-' * len(log))
-            self.install_case(cosmo_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in)
+            self.install_case(cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in)
             # Setting case name in namelist not possible before actually transfering the namelists
             self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
         self.cos_exe = cos_exe
         if not self.cosmo_only:
             self.cesm_exe = cesm_exe
         # Basic init (no particular work required)
-        self.cosmo_only = cosmo_only
         self.gen_oasis = gen_oasis
         self.run_length = run_length
         self.gpu_mode = gpu_mode
@@ -147,48 +148,45 @@ class cc2_case(object):
             self._end_date = None
 
 
-    def install_case(self, cosmo_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in):
+    def install_case(self, cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in):
         if not os.path.exists(self.path):
             # Create case directory
             os.makedirs(self.path)
 
         # Transfer everything except COSMO input files
-        check_call(['rsync', '-avr', cos_nml+'/', self.path])
-        check_call(['rsync', '-avr', cos_exe, self.path])
-        if not opts.cosmo_only:
-            check_call(['rsync', '-avr', cesm_in+'/', os.path.join(self.path,'CESM_input')+'/'])
-            check_call(['rsync', '-avr', cesm_nml+'/', self.path])
-            check_call(['rsync', '-avr', cesm_exe, self.path])
-
-        # Set COSMO input directory for restart use
-        self.cos_in = os.path.abspath(cos_in)
+        check_call(['rsync', '-avrL', os.path.abspath(cos_nml)+'/', self.path])
+        check_call(['rsync', '-avrL', os.path.abspath(cos_exe), self.path])
+        if not self.cosmo_only:
+            check_call(['rsync', '-avrL', os.path.abspath(cesm_in)+'/', os.path.join(self.path,'CESM_input')+'/'])
+            check_call(['rsync', '-avrL', os.path.abspath(cesm_nml)+'/', self.path])
+            check_call(['rsync', '-avrL', os.path.abspath(cesm_exe), self.path])
 
 
     def transfer_cos_in(self, start_date, end_date):
         # Set time interval between 2 intput files
-        dh = self.nml[INPUT_IO]['gribin']['hincbound']
+        dh = self.nml['INPUT_IO']['gribin']['hincbound']
         delta = timedelta(seconds=dh*3600.0)
         # Set file extension
         ext = ''
-        if 'yform_read' in self.nml[INPUT_IO]['ioctl']:
-            if self.nml[INPUT_IO]['ioctl']['yform_read'] == 'ncdf':
+        if 'yform_read' in self.nml['INPUT_IO']['ioctl']:
+            if self.nml['INPUT_IO']['ioctl']['yform_read'] == 'ncdf':
                 ext = '.nc'
         # Build file list to transfer
         with open('transfer_list', mode ='w') as t_list:
             # - ML - later, only do this when installing case
-            self._check_input('laf', start_date, ext, t_list)
+            self._check_COSMO_input('laf', start_date, ext, t_list)
             cur_date = start_date
             while cur_date <= end_date:
-                self._check_input('lbfd', cur_date, ext, t_list)
+                self._check_COSMO_input('lbfd', cur_date, ext, t_list)
                 cur_date += delta
         # Tranfer files
-        check_call(['rsync', '-avr', '--files-from', 'transfer_list',
+        check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
                     self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/'])
         # Remove transfer list
         os.remove('transfer_list')
 
 
-    def _check_COSMO_input(root, date, ext, file_list):
+    def _check_COSMO_input(self, root, date, ext, file_list):
               file_name = root + format(date.strftime(date_fmt['cosmo'])) + ext
               if os.path.exists(os.path.join(self.cos_in, file_name)):
                   file_list.write(file_name + '\n')
@@ -303,6 +301,8 @@ class cc2_case(object):
             drv_in = self.nml['drv_in']
         # adapt INPUT_ORG
         INPUT_ORG['runctl']['nstop'] = int(hstop * 3600.0 // INPUT_ORG['runctl']['dt']) - 1
+        if 'hstop' in INPUT_ORG['runctl']:
+            del INPUT_ORG['runctl']['hstop']
         # adapt INPUT_IO
         for gribout in self._get_gribouts():
             gribout['hcomb'][0:2] = hstart, hstop
@@ -426,6 +426,7 @@ class cc2_case(object):
         ET.SubElement(config, 'cos_exe').text = self.cos_exe
         if not self.cosmo_only:
             ET.SubElement(config, 'cesm_exe').text = self.cesm_exe
+        ET.SubElement(config, 'cos_in').text = self.cos_in
         ET.SubElement(config, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
         ET.SubElement(config, 'dummy_day', type='py_eval').text = str(self.dummy_day)
         self._update_xml_config(config)
@@ -518,13 +519,13 @@ class daint_case(cc2_case):
                  shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
                  **base_case_args):
 
-        cc2_case.__init__(self, **base_case_args)
         self.wall_time = wall_time
         self.account = account
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version
         self.shebang = shebang
         self.partition = partition
+        cc2_case.__init__(self, **base_case_args)
 
     @property
     def account(self):
@@ -657,13 +658,13 @@ class daint_case(cc2_case):
         with open(f_path, 'w') as f:
             f.write("#!/bin/bash\n")
             f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
-            f.write("./{:s}".format(self.COSMO_exe))
+            f.write("./{:s}".format(self.cosmo_exe))
         os.chmod(f_path, 0o755)
         f_path = os.path.join(self.path, 'cesm.bash')
         with open(f_path, 'w') as f:
             f.write("#!/bin/bash\n")
             f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
-            f.write("./{:s}".format(self.CESM_exe))
+            f.write("./{:s}".format(self.cesm_exe))
         os.chmod(f_path, 0o755)
 
         # build proc_config file

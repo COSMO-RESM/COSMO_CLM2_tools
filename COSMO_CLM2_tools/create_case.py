@@ -142,6 +142,7 @@ def create_case():
     # Parse machine and case argumennts from cmd line args and xml file
     # =================================================================
     machine, cc2_args = get_case_args(opts, cc2_cmd_args)
+    print('- ML - DBG: cc2_args = ', cc2_args)
 
     # Create case instance
     # ====================
@@ -187,7 +188,7 @@ def get_case_args(cmd_opts, cc2_cmd_args):
     main_args = get_xml_node_args(main_node, exclude=('machine'))
     main_args.update(cc2_cmd_args['main'])
 
-    machine_args = get_xml_node_args(machine_args_node)
+    machine_args = get_xml_node_args(machine_node)
     machine_args.update(cc2_cmd_args[machine])
 
     cc2_args = {k:v for k,v in main_args.items() if v is not None}

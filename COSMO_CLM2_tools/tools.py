@@ -34,7 +34,7 @@ def add_time_from_str(date1, dt_str):
 def get_xml_node_args(node, exclude=()):
     """Read case arguments from xml node"""
 
-    if not node:
+    if node is None:
         return {}
 
     xml_args = {}
