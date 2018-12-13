@@ -689,7 +689,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
               raise NotImplementedError(NotImplementMessage.format('_submit_func(self)', self.__class__.__name__))
     #+END_SRC
-*** case decorator
+*** available case decorator
     #+BEGIN_SRC python
       def available(cls):
           if cls._target_machine is None:
