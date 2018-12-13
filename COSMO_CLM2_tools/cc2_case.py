@@ -1,5 +1,5 @@
 from __future__ import print_function
-from .date_formats import date_fmt_in, date_fmt_cosmo, date_fmt_cesm
+from .tools import date_fmt, add_time_from_str
 from subprocess import check_call
 from argparse import ArgumentParser, RawTextHelpFormatter
 import f90nml
@@ -8,75 +8,116 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from glob import glob
-from socket import gethostname
 import shutil
 import time
 import sys
-from warnings import warn
 
 available_cases = {}
 
-def factory(machine, **kwargs):
+def factory(machine, **case_args):
     if machine not in available_cases:
         raise ValueError("machine {:s} not available".format(machine))
     else:
-        return available_cases[machine](**kwargs)
+        return available_cases[machine](**case_args)
 
 class cc2_case(object):
     """Base class defining a COSMO-CLM2 case"""
 
+    _target_machine = None
     _n_tasks_per_node = None
+    _default_install_dir = None
     NotImplementMessage = "required method {:s} not implemented by class {:s}.\n" \
                           "Implement with a single pass statement if irrelevant to this machine."
 
 
-    def __init__(self, name='COSMO_CLM2', path=None,
+    def __init__(self, name='COSMO_CLM2', install_dir=None, install=False,
+                 cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo',
+                 cesm_nml='./CESM_nml', cesm_in='./CESM_input', cesm_exe='./cesm.exe',
+                 oas_in='./OASIS_input', oas_nml='./OASIS_nml',
                  start_date=None, end_date=None, run_length=None,
-                 COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, dummy_day=True, cosmo_only=False,
                  gen_oasis=False):
+
+        # Create namelists dictionnary
+        self.nml = nmldict(self)
+        # Set case name, install_dir and path
+        self._name = name
+        self.install_dir = install_dir   # also sets self._path
+        # Install: transfer namelists, executables and input files
+        if install:
+            log = 'Setting up case {:s} in {:s}'.format(self._name, self._path)
+            print(log + '\n' + '-' * len(log))
+            self.install_case(cosmo_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in)
+            # Setting case name in namelist not possible before actually transfering the namelists
+            self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
+        self.cos_exe = cos_exe
+        if not self.cosmo_only:
+            self.cesm_exe = cesm_exe
         # Basic init (no particular work required)
         self.cosmo_only = cosmo_only
         self.gen_oasis = gen_oasis
         self.run_length = run_length
-        self.COSMO_exe = COSMO_exe
-        if not self.cosmo_only:
-            self.CESM_exe = CESM_exe
         self.gpu_mode = gpu_mode
         self.dummy_day = dummy_day
         # Settings involving namelist changes
-        self.path = path
-        self.nml = nmldict(self)
-        self.name = name
         self.start_date = start_date
         self.end_date = end_date
         self._compute_run_dates()   # defines _run_start_date, _run_end_date and _runtime (maybe _end_date)
         self._apply_run_dates()
         self._check_gribout()
         self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
-        self.write_open_nml()   # Nothing requires changing namelists after that
-        # Create batch script
-        if self._run_start_date == self._start_date:
+        # Finish install
+        if install:
+            # Transfer COSMO input files
+            # - ML - Change this in future versions: only transfer the first chunck of input files
+            self.transfer_cos_in(self.start_date, self.end_date)
+            # Create batch script
             self._build_controller()
-        # Create missing directories
-        self._create_missing_dirs()
+            # Create missing directories
+            self._create_missing_dirs()
+        # Write namelists object to file
+        self.write_open_nml()
+
+
+    @property
+    def cos_exe(self):
+        return self._cos_exe
+    @cos_exe.setter
+    def cos_exe(self, exe_path):
+        self._cos_exe = os.path.basename(exe_path)
+
+    @property
+    def cesm_exe(self):
+        return self._cesm_exe
+    @cesm_exe.setter
+    def cesm_exe(self, exe_path):
+        self._cesm_exe = os.path.basename(exe_path)
+
+    @property
+    def install_dir(self):
+        return self._install_dir
+    @install_dir.setter
+    def install_dir(self, ins_dir):
+        if ins_dir is None:
+            if self._default_install_dir is None:
+                raise NotImplementedError("_default_install_dir class variable not set for Class {:s}".format(cls.__name__))
+            else:
+                self._install_dir = self._default_install_dir
+        else:
+            self._install_dir = ins_dir
+        # Make install_dir absolute
+        self._install_dir = os.path.abspath(self._install_dir)
+        # Set case path
+        self._path = os.path.join(self._install_dir, self.name)
 
     @property
     def path(self):
         return self._path
-    @path.setter
-    def path(self, path):
-        self._path = os.path.abspath(path)
 
     @property
     def name(self):
         return self._name
-    @name.setter
-    def name(self, name):
-        self._name = name
-        if not self.cosmo_only:
-            self.nml['drv_in']['seq_infodata_inparm']['case_name'] = name
 
     @property
     def start_date(self):
@@ -84,11 +125,11 @@ class cc2_case(object):
     @start_date.setter
     def start_date(self, start_date):
         if start_date is not None:
-            self._start_date = datetime.strptime(start_date, date_fmt_in)
-            self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt_cosmo)
+            self._start_date = datetime.strptime(start_date, date_fmt['in'])
+            self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt['cosmo'])
         elif 'ydate_ini' in self.nml['INPUT_ORG']['runctl'].keys():
             self._start_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_ini'],
-                                                 date_fmt_cosmo)
+                                                 date_fmt['cosmo'])
         else:
             raise ValueError("ydate_ini has to be given in INPUT_ORG/runctl if no start_date is provided")
 
@@ -98,12 +139,61 @@ class cc2_case(object):
     @end_date.setter
     def end_date(self, end_date):
         if end_date is not None:
-            self._end_date = datetime.strptime(end_date, date_fmt_in)
-            self.nml['INPUT_ORG']['runctl']['ydate_end'] = self._end_date.strftime(date_fmt_cosmo)
+            self._end_date = datetime.strptime(end_date, date_fmt['in'])
+            self.nml['INPUT_ORG']['runctl']['ydate_end'] = self._end_date.strftime(date_fmt['cosmo'])
         elif 'ydate_end' in self.nml['INPUT_ORG']['runctl'].keys():
-            self._end_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_end'], date_fmt_cosmo)
+            self._end_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_end'], date_fmt['cosmo'])
         else:
             self._end_date = None
+
+
+    def install_case(self, cosmo_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in):
+        if not os.path.exists(self.path):
+            # Create case directory
+            os.makedirs(self.path)
+
+        # Transfer everything except COSMO input files
+        check_call(['rsync', '-avr', cos_nml+'/', self.path])
+        check_call(['rsync', '-avr', cos_exe, self.path])
+        if not opts.cosmo_only:
+            check_call(['rsync', '-avr', cesm_in+'/', os.path.join(self.path,'CESM_input')+'/'])
+            check_call(['rsync', '-avr', cesm_nml+'/', self.path])
+            check_call(['rsync', '-avr', cesm_exe, self.path])
+
+        # Set COSMO input directory for restart use
+        self.cos_in = os.path.abspath(cos_in)
+
+
+    def transfer_cos_in(self, start_date, end_date):
+        # Set time interval between 2 intput files
+        dh = self.nml[INPUT_IO]['gribin']['hincbound']
+        delta = timedelta(seconds=dh*3600.0)
+        # Set file extension
+        ext = ''
+        if 'yform_read' in self.nml[INPUT_IO]['ioctl']:
+            if self.nml[INPUT_IO]['ioctl']['yform_read'] == 'ncdf':
+                ext = '.nc'
+        # Build file list to transfer
+        with open('transfer_list', mode ='w') as t_list:
+            # - ML - later, only do this when installing case
+            self._check_input('laf', start_date, ext, t_list)
+            cur_date = start_date
+            while cur_date <= end_date:
+                self._check_input('lbfd', cur_date, ext, t_list)
+                cur_date += delta
+        # Tranfer files
+        check_call(['rsync', '-avr', '--files-from', 'transfer_list',
+                    self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/'])
+        # Remove transfer list
+        os.remove('transfer_list')
+
+
+    def _check_COSMO_input(root, date, ext, file_list):
+              file_name = root + format(date.strftime(date_fmt['cosmo'])) + ext
+              if os.path.exists(os.path.join(self.cos_in, file_name)):
+                  file_list.write(file_name + '\n')
+              else:
+                  raise ValueError("input file {:s} is missing from {:s}".format(file_name, self.cos_in))
 
 
     def _organize_tasks(self, ncosx, ncosy, ncosio, ncesm):
@@ -162,10 +252,10 @@ class cc2_case(object):
             drv_in = self.nml['drv_in']
         # Read in _run_start_date
         # -----------------------
-        date_cosmo = datetime.strptime(INPUT_ORG['runctl']['ydate_ini'], date_fmt_cosmo) \
+        date_cosmo = datetime.strptime(INPUT_ORG['runctl']['ydate_ini'], date_fmt['cosmo']) \
                      + timedelta(hours=INPUT_ORG['runctl']['hstart'])
         if not self.cosmo_only:
-            date_cesm = datetime.strptime(str(drv_in['seq_timemgr_inparm']['start_ymd']), date_fmt_cesm)
+            date_cesm = datetime.strptime(str(drv_in['seq_timemgr_inparm']['start_ymd']), date_fmt['cesm'])
             if date_cosmo != date_cesm:
                 raise ValueError("start dates are not identical in COSMO and CESM namelists")
         self._run_start_date = date_cosmo
@@ -327,15 +417,15 @@ class cc2_case(object):
         config = ET.Element('config')
         tree = ET.ElementTree(config)
         ET.SubElement(config, 'name').text = self.name
-        ET.SubElement(config, 'path').text = self.path
+        ET.SubElement(config, 'install_dir').text = self.install_dir
         ET.SubElement(config, 'cosmo_only', type='py_eval').text = str(self.cosmo_only)
         ET.SubElement(config, 'gen_oasis', type='py_eval').text = str(self.gen_oasis)
-        ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt_in)
-        ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt_in)
+        ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt['in'])
+        ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt['in'])
         ET.SubElement(config, 'run_length').text = self.run_length
-        ET.SubElement(config, 'COSMO_exe').text = self.COSMO_exe
+        ET.SubElement(config, 'cos_exe').text = self.cos_exe
         if not self.cosmo_only:
-            ET.SubElement(config, 'CESM_exe').text = self.CESM_exe
+            ET.SubElement(config, 'cesm_exe').text = self.cesm_exe
         ET.SubElement(config, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
         ET.SubElement(config, 'dummy_day', type='py_eval').text = str(self.dummy_day)
         self._update_xml_config(config)
@@ -352,7 +442,7 @@ class cc2_case(object):
             hstart = (self._run_end_date - self._start_date).total_seconds() // 3600.0
             self.nml['INPUT_ORG']['runctl']['hstart'] = hstart
             if not self.cosmo_only:
-                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt_cesm))
+                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt['cesm']))
             self._compute_run_dates()
             # - ML - Setting ydirini might not be needed, try without at some point
             self.nml['INPUT_IO']['gribin']['ydirini'] = self.nml['INPUT_IO']['ioctl']['ydir_restart_out']
@@ -409,8 +499,11 @@ class cc2_case(object):
         raise NotImplementedError(NotImplementMessage.format('_submit_func(self)', self.__class__.__name__))
 
 def available(cls):
-    available_cases[cls._target_machine] = cls
-    return cls
+    if cls._target_machine is None:
+        raise NotImplementedError("_target_machine class variable not set for Class {:s}".format(cls.__name__))
+    else:
+        available_cases[cls._target_machine] = cls
+        return cls
 
 @available
 class daint_case(cc2_case):
@@ -418,17 +511,20 @@ class daint_case(cc2_case):
 
     _target_machine='daint'
     _n_tasks_per_node = 12
+    _default_install_dir = os.path.normpath(os.environ['SCRATCH'])
+
 
     def __init__(self, wall_time='24:00:00', account=None, partition=None,
-                 shebang='#!/usr/bin/env bash', modules_opt='switch', pgi_version=None,
+                 shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
                  **base_case_args):
+
+        cc2_case.__init__(self, **base_case_args)
         self.wall_time = wall_time
         self.account = account
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version
         self.shebang = shebang
         self.partition = partition
-        cc2_case.__init__(self, **base_case_args)
 
     @property
     def account(self):
@@ -444,11 +540,9 @@ class daint_case(cc2_case):
 
     def _build_controller(self):
 
-        # Build controller (master file)
-        # ------------------------------
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                              self._run_start_date.strftime(date_fmt_cesm),
-                                              self._run_end_date.strftime(date_fmt_cesm))
+                                              self._run_start_date.strftime(date_fmt['cesm']),
+                                              self._run_end_date.strftime(date_fmt['cesm']))
         with open(os.path.join(self.path, 'controller'), mode='w') as script:
             # shebang
             script.write('{:s}\n\n'.format(self.shebang))
@@ -481,6 +575,8 @@ class daint_case(cc2_case):
                 script.write('export MV2_ENABLE_AFFINITY=0\n')
                 script.write('export MV2_USE_CUDA=1\n')
                 script.write('export MPICH_G2G_PIPELINE=256\n')
+                if self.cosmo_only:
+                    script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
             script.write('\n')
 
             # Modules
@@ -494,12 +590,7 @@ class daint_case(cc2_case):
                 # pgi version
                 if self.pgi_version is not None:
                     script.write('module unload pgi\n')
-                    if self.pgi_version == '17.10.0':
-                        script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
-                        script.write('module load pgi/17.10\n')
-                        script.write('export PGI_VERS_STR=17.10.0\n')
-                    else:
-                        script.write('module load pgi/{:s}\n'.format(self.pgi_version))
+                    script.write('module load pgi/{:s}\n'.format(self.pgi_version))
 
                 # other modules
                 script.write('module load daint-gpu\n')
@@ -512,27 +603,10 @@ class daint_case(cc2_case):
             script.write('cc2_control_case ./config.xml\n')
 
 
-        # Build COSMO and CESM bash files
-        # -------------------------------
-        f_path = os.path.join(self.path, 'cosmo.bash')
-        with open(f_path, 'w') as f:
-            f.write("#!/bin/bash\n")
-            f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
-            f.write("./{:s}".format(self.COSMO_exe))
-        os.chmod(f_path, 0o755)
-        if not self.cosmo_only:
-            f_path = os.path.join(self.path, 'cesm.bash')
-            with open(f_path, 'w') as f:
-                f.write("#!/bin/bash\n")
-                f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
-                f.write("./{:s}".format(self.CESM_exe))
-            os.chmod(f_path, 0o755)
-
-
     def _update_controller(self):
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                              self._run_start_date.strftime(date_fmt_cesm),
-                                              self._run_end_date.strftime(date_fmt_cesm))
+                                              self._run_start_date.strftime(date_fmt['cesm']),
+                                              self._run_end_date.strftime(date_fmt['cesm']))
         rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
                  '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
         with open(os.path.join(self.path, 'controller'), mode='r+') as f:
@@ -577,6 +651,22 @@ class daint_case(cc2_case):
 
 
     def _build_proc_config(self):
+
+        # build executable bash files
+        f_path = os.path.join(self.path, 'cosmo.bash')
+        with open(f_path, 'w') as f:
+            f.write("#!/bin/bash\n")
+            f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
+            f.write("./{:s}".format(self.COSMO_exe))
+        os.chmod(f_path, 0o755)
+        f_path = os.path.join(self.path, 'cesm.bash')
+        with open(f_path, 'w') as f:
+            f.write("#!/bin/bash\n")
+            f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
+            f.write("./{:s}".format(self.CESM_exe))
+        os.chmod(f_path, 0o755)
+
+        # build proc_config file
         with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
             if self.gpu_mode:
                 N = self._n_tasks_per_node
@@ -614,8 +704,8 @@ class mistral_case(cc2_case):
 
     def _build_controller(self):
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                              self._run_start_date.strftime(date_fmt_cesm),
-                                              self._run_end_date.strftime(date_fmt_cesm))
+                                              self._run_start_date.strftime(date_fmt['cesm']),
+                                              self._run_end_date.strftime(date_fmt['cesm']))
         with open(os.path.join(self.path, 'controller'), mode='w') as script:
             # shebang
             script.write('#!/usr/bin/env bash\n')
@@ -647,8 +737,8 @@ class mistral_case(cc2_case):
 
     def _update_controller(self):
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                              self._run_start_date.strftime(date_fmt_cesm),
-                                              self._run_end_date.strftime(date_fmt_cesm))
+                                              self._run_start_date.strftime(date_fmt['cesm']),
+                                              self._run_end_date.strftime(date_fmt['cesm']))
         rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
                  '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
         with open(os.path.join(self.path, 'controller'), mode='r+') as f:
@@ -696,5 +786,5 @@ class nmldict(dict):
         self[name].write(os.path.join(self.cc2case.path, name), force=True)
 
     def write_all(self):
-        for name, nml in self.items():
+        for name in self:
             self.write(name)
