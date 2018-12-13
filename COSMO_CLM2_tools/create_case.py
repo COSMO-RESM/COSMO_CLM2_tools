@@ -192,6 +192,7 @@ def get_case_args(cmd_opts, cc2_cmd_args):
 
     cc2_args = {k:v for k,v in main_args.items() if v is not None}
     cc2_args.update({k:v for k,v in machine_args.items() if v is not None})
+    cc2_args['install'] = True
 
     return machine, cc2_args
 

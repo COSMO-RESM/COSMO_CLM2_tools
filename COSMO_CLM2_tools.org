@@ -1197,6 +1197,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           cc2_args = {k:v for k,v in main_args.items() if v is not None}
           cc2_args.update({k:v for k,v in machine_args.items() if v is not None})
+          cc2_args['install'] = True
 
           return machine, cc2_args
     #+END_SRC
