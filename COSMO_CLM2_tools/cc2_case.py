@@ -47,6 +47,7 @@ class cc2_case(object):
         self.install_dir = install_dir   # also sets self._path
         # Install: transfer namelists, executables and input files
         self.cos_in = os.path.abspath(cos_in)
+        self.gen_oasis = gen_oasis
         if install:
             log = 'Setting up case {:s} in {:s}'.format(self._name, self._path)
             print(log + '\n' + '-' * len(log))
@@ -57,7 +58,6 @@ class cc2_case(object):
         if not self.cosmo_only:
             self.cesm_exe = cesm_exe
         # Basic init (no particular work required)
-        self.gen_oasis = gen_oasis
         self.run_length = run_length
         self.gpu_mode = gpu_mode
         self.dummy_day = dummy_day
@@ -160,6 +160,17 @@ class cc2_case(object):
             check_call(['rsync', '-avrL', os.path.abspath(cesm_in)+'/', os.path.join(self.path,'CESM_input')+'/'])
             check_call(['rsync', '-avrL', os.path.abspath(cesm_nml)+'/', self.path])
             check_call(['rsync', '-avrL', os.path.abspath(cesm_exe), self.path])
+            if not self.gen_oasis:
+                check_call(['rsync', '-avrL', os.path.abspath(oas_in)+'/', self.path])
+            else:
+                print('generate OASIS file:')
+                for f in os.listdir(oas_in):
+                    try:
+                        print('   removing ' +  os.path.join(self.path, f))
+                        os.remove(os.path.join(self.path, f))
+                    except OSError:
+                        pass
+            check_call(['rsync', '-avrL', os.path.abspath(oas_nml)+'/', self.path])
 
 
     def transfer_cos_in(self, start_date, end_date):
