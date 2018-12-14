@@ -1149,7 +1149,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           # Parse machine and case argumennts from cmd line args and xml file
           # =================================================================
           machine, cc2_args = get_case_args(opts, cc2_cmd_args)
-          print('- ML - DBG: cc2_args = ', cc2_args)
 
           # Create case instance
           # ====================

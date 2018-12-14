@@ -142,7 +142,6 @@ def create_case():
     # Parse machine and case argumennts from cmd line args and xml file
     # =================================================================
     machine, cc2_args = get_case_args(opts, cc2_cmd_args)
-    print('- ML - DBG: cc2_args = ', cc2_args)
 
     # Create case instance
     # ====================
