@@ -185,7 +185,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 *** preamble
     #+BEGIN_SRC python
       from __future__ import print_function
-      from .date_formats import date_fmt_in, date_fmt_cosmo, date_fmt_cesm
+      from .tools import date_fmt, add_time_from_str
       from subprocess import check_call
       from argparse import ArgumentParser, RawTextHelpFormatter
       import f90nml
@@ -194,21 +194,19 @@ Tools for automated creation and run of COSMO_CLM2 simulations
       import re
       import xml.etree.ElementTree as ET
       from glob import glob
-      from socket import gethostname
       import shutil
       import time
       import sys
-      from warnings import warn
 
       available_cases = {}
     #+END_SRC
 *** case factory function
     #+BEGIN_SRC python
-      def factory(machine, **kwargs):
+      def factory(machine, **case_args):
           if machine not in available_cases:
               raise ValueError("machine {:s} not available".format(machine))
           else:
-              return available_cases[machine](**kwargs)
+              return available_cases[machine](**case_args)
     #+END_SRC
 *** cc2_case (base) class
     - [ ] Add option for "user defined" batch script. Not full freedom
@@ -217,58 +215,102 @@ Tools for automated creation and run of COSMO_CLM2 simulations
       class cc2_case(object):
           """Base class defining a COSMO-CLM2 case"""
 
+          _target_machine = None
           _n_tasks_per_node = None
+          _default_install_dir = None
           NotImplementMessage = "required method {:s} not implemented by class {:s}.\n" \
                                 "Implement with a single pass statement if irrelevant to this machine."
 
 
-          def __init__(self, name='COSMO_CLM2', path=None,
+          def __init__(self, name='COSMO_CLM2', install_dir=None, install=False,
+                       cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo',
+                       cesm_nml='./CESM_nml', cesm_in='./CESM_input', cesm_exe='./cesm.exe',
+                       oas_in='./OASIS_input', oas_nml='./OASIS_nml',
                        start_date=None, end_date=None, run_length=None,
-                       COSMO_exe='./cosmo', CESM_exe='./cesm.exe',
                        ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                        gpu_mode=False, dummy_day=True, cosmo_only=False,
                        gen_oasis=False):
-              # Basic init (no particular work required)
+
               self.cosmo_only = cosmo_only
+              # Create namelists dictionnary
+              self.nml = nmldict(self)
+              # Set case name, install_dir and path
+              self._name = name
+              self.install_dir = install_dir   # also sets self._path
+              # Install: transfer namelists, executables and input files
+              self.cos_in = os.path.abspath(cos_in)
+              if install:
+                  log = 'Setting up case {:s} in {:s}'.format(self._name, self._path)
+                  print(log + '\n' + '-' * len(log))
+                  self.install_case(cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in)
+                  # Setting case name in namelist not possible before actually transfering the namelists
+                  self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
+              self.cos_exe = cos_exe
+              if not self.cosmo_only:
+                  self.cesm_exe = cesm_exe
+              # Basic init (no particular work required)
               self.gen_oasis = gen_oasis
               self.run_length = run_length
-              self.COSMO_exe = COSMO_exe
-              if not self.cosmo_only:
-                  self.CESM_exe = CESM_exe
               self.gpu_mode = gpu_mode
               self.dummy_day = dummy_day
               # Settings involving namelist changes
-              self.path = path
-              self.nml = nmldict(self)
-              self.name = name
               self.start_date = start_date
               self.end_date = end_date
               self._compute_run_dates()   # defines _run_start_date, _run_end_date and _runtime (maybe _end_date)
               self._apply_run_dates()
               self._check_gribout()
               self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
-              self.write_open_nml()   # Nothing requires changing namelists after that
-              # Create batch script
-              if self._run_start_date == self._start_date:
+              # Finish install
+              if install:
+                  # Transfer COSMO input files
+                  # - ML - Change this in future versions: only transfer the first chunck of input files
+                  self.transfer_cos_in(self.start_date, self.end_date)
+                  # Create batch script
                   self._build_controller()
-              # Create missing directories
-              self._create_missing_dirs()
+                  # Create missing directories
+                  self._create_missing_dirs()
+              # Write namelists object to file
+              self.write_open_nml()
+
+
+          @property
+          def cos_exe(self):
+              return self._cos_exe
+          @cos_exe.setter
+          def cos_exe(self, exe_path):
+              self._cos_exe = os.path.basename(exe_path)
+
+          @property
+          def cesm_exe(self):
+              return self._cesm_exe
+          @cesm_exe.setter
+          def cesm_exe(self, exe_path):
+              self._cesm_exe = os.path.basename(exe_path)
+
+          @property
+          def install_dir(self):
+              return self._install_dir
+          @install_dir.setter
+          def install_dir(self, ins_dir):
+              if ins_dir is None:
+                  if self._default_install_dir is None:
+                      raise NotImplementedError("_default_install_dir class variable not set for Class {:s}".format(cls.__name__))
+                  else:
+                      self._install_dir = self._default_install_dir
+              else:
+                  self._install_dir = ins_dir
+              # Make install_dir absolute
+              self._install_dir = os.path.abspath(self._install_dir)
+              # Set case path
+              self._path = os.path.join(self._install_dir, self.name)
 
           @property
           def path(self):
               return self._path
-          @path.setter
-          def path(self, path):
-              self._path = os.path.abspath(path)
 
           @property
           def name(self):
               return self._name
-          @name.setter
-          def name(self, name):
-              self._name = name
-              if not self.cosmo_only:
-                  self.nml['drv_in']['seq_infodata_inparm']['case_name'] = name
 
           @property
           def start_date(self):
@@ -276,11 +318,11 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           @start_date.setter
           def start_date(self, start_date):
               if start_date is not None:
-                  self._start_date = datetime.strptime(start_date, date_fmt_in)
-                  self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt_cosmo)
+                  self._start_date = datetime.strptime(start_date, date_fmt['in'])
+                  self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt['cosmo'])
               elif 'ydate_ini' in self.nml['INPUT_ORG']['runctl'].keys():
                   self._start_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_ini'],
-                                                       date_fmt_cosmo)
+                                                       date_fmt['cosmo'])
               else:
                   raise ValueError("ydate_ini has to be given in INPUT_ORG/runctl if no start_date is provided")
 
@@ -290,12 +332,58 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           @end_date.setter
           def end_date(self, end_date):
               if end_date is not None:
-                  self._end_date = datetime.strptime(end_date, date_fmt_in)
-                  self.nml['INPUT_ORG']['runctl']['ydate_end'] = self._end_date.strftime(date_fmt_cosmo)
+                  self._end_date = datetime.strptime(end_date, date_fmt['in'])
+                  self.nml['INPUT_ORG']['runctl']['ydate_end'] = self._end_date.strftime(date_fmt['cosmo'])
               elif 'ydate_end' in self.nml['INPUT_ORG']['runctl'].keys():
-                  self._end_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_end'], date_fmt_cosmo)
+                  self._end_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_end'], date_fmt['cosmo'])
               else:
                   self._end_date = None
+
+
+          def install_case(self, cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in):
+              if not os.path.exists(self.path):
+                  # Create case directory
+                  os.makedirs(self.path)
+
+              # Transfer everything except COSMO input files
+              check_call(['rsync', '-avrL', os.path.abspath(cos_nml)+'/', self.path])
+              check_call(['rsync', '-avrL', os.path.abspath(cos_exe), self.path])
+              if not self.cosmo_only:
+                  check_call(['rsync', '-avrL', os.path.abspath(cesm_in)+'/', os.path.join(self.path,'CESM_input')+'/'])
+                  check_call(['rsync', '-avrL', os.path.abspath(cesm_nml)+'/', self.path])
+                  check_call(['rsync', '-avrL', os.path.abspath(cesm_exe), self.path])
+
+
+          def transfer_cos_in(self, start_date, end_date):
+              # Set time interval between 2 intput files
+              dh = self.nml['INPUT_IO']['gribin']['hincbound']
+              delta = timedelta(seconds=dh*3600.0)
+              # Set file extension
+              ext = ''
+              if 'yform_read' in self.nml['INPUT_IO']['ioctl']:
+                  if self.nml['INPUT_IO']['ioctl']['yform_read'] == 'ncdf':
+                      ext = '.nc'
+              # Build file list to transfer
+              with open('transfer_list', mode ='w') as t_list:
+                  # - ML - later, only do this when installing case
+                  self._check_COSMO_input('laf', start_date, ext, t_list)
+                  cur_date = start_date
+                  while cur_date <= end_date:
+                      self._check_COSMO_input('lbfd', cur_date, ext, t_list)
+                      cur_date += delta
+              # Tranfer files
+              check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
+                          self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/'])
+              # Remove transfer list
+              os.remove('transfer_list')
+
+
+          def _check_COSMO_input(self, root, date, ext, file_list):
+                    file_name = root + format(date.strftime(date_fmt['cosmo'])) + ext
+                    if os.path.exists(os.path.join(self.cos_in, file_name)):
+                        file_list.write(file_name + '\n')
+                    else:
+                        raise ValueError("input file {:s} is missing from {:s}".format(file_name, self.cos_in))
 
 
           def _organize_tasks(self, ncosx, ncosy, ncosio, ncesm):
@@ -354,10 +442,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   drv_in = self.nml['drv_in']
               # Read in _run_start_date
               # -----------------------
-              date_cosmo = datetime.strptime(INPUT_ORG['runctl']['ydate_ini'], date_fmt_cosmo) \
+              date_cosmo = datetime.strptime(INPUT_ORG['runctl']['ydate_ini'], date_fmt['cosmo']) \
                            + timedelta(hours=INPUT_ORG['runctl']['hstart'])
               if not self.cosmo_only:
-                  date_cesm = datetime.strptime(str(drv_in['seq_timemgr_inparm']['start_ymd']), date_fmt_cesm)
+                  date_cesm = datetime.strptime(str(drv_in['seq_timemgr_inparm']['start_ymd']), date_fmt['cesm'])
                   if date_cosmo != date_cesm:
                       raise ValueError("start dates are not identical in COSMO and CESM namelists")
               self._run_start_date = date_cosmo
@@ -407,6 +495,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               if 'hstop' in INPUT_ORG['runctl']:
                   del INPUT_ORG['runctl']['hstop']
               INPUT_ORG['runctl']['nstop'] = int(hstop * 3600.0 // INPUT_ORG['runctl']['dt']) - 1
+              if 'hstop' in INPUT_ORG['runctl']:
+                  del INPUT_ORG['runctl']['hstop']
               # adapt INPUT_IO
               for gribout in self._get_gribouts():
                   gribout['hcomb'][0:2] = hstart, hstop
@@ -521,15 +611,16 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               config = ET.Element('config')
               tree = ET.ElementTree(config)
               ET.SubElement(config, 'name').text = self.name
-              ET.SubElement(config, 'path').text = self.path
+              ET.SubElement(config, 'install_dir').text = self.install_dir
               ET.SubElement(config, 'cosmo_only', type='py_eval').text = str(self.cosmo_only)
               ET.SubElement(config, 'gen_oasis', type='py_eval').text = str(self.gen_oasis)
-              ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt_in)
-              ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt_in)
+              ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt['in'])
+              ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt['in'])
               ET.SubElement(config, 'run_length').text = self.run_length
-              ET.SubElement(config, 'COSMO_exe').text = self.COSMO_exe
+              ET.SubElement(config, 'cos_exe').text = self.cos_exe
               if not self.cosmo_only:
-                  ET.SubElement(config, 'CESM_exe').text = self.CESM_exe
+                  ET.SubElement(config, 'cesm_exe').text = self.cesm_exe
+              ET.SubElement(config, 'cos_in').text = self.cos_in
               ET.SubElement(config, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
               ET.SubElement(config, 'dummy_day', type='py_eval').text = str(self.dummy_day)
               self._update_xml_config(config)
@@ -546,7 +637,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   hstart = (self._run_end_date - self._start_date).total_seconds() // 3600.0
                   self.nml['INPUT_ORG']['runctl']['hstart'] = hstart
                   if not self.cosmo_only:
-                      self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt_cesm))
+                      self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt['cesm']))
                   self._compute_run_dates()
                   # - ML - Setting ydirini might not be needed, try without at some point
                   self.nml['INPUT_IO']['gribin']['ydirini'] = self.nml['INPUT_IO']['ioctl']['ydir_restart_out']
@@ -602,11 +693,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
               raise NotImplementedError(NotImplementMessage.format('_submit_func(self)', self.__class__.__name__))
     #+END_SRC
-*** case decorator
+*** available case decorator
     #+BEGIN_SRC python
       def available(cls):
-          available_cases[cls._target_machine] = cls
-          return cls
+          if cls._target_machine is None:
+              raise NotImplementedError("_target_machine class variable not set for Class {:s}".format(cls.__name__))
+          else:
+              available_cases[cls._target_machine] = cls
+              return cls
     #+END_SRC
 
 *** daint_case class
@@ -617,10 +711,13 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           _target_machine='daint'
           _n_tasks_per_node = 12
+          _default_install_dir = os.path.normpath(os.environ['SCRATCH'])
+
 
           def __init__(self, wall_time='24:00:00', account=None, partition=None,
                        shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
                        ,**base_case_args):
+
               self.wall_time = wall_time
               self.account = account
               self.modules_opt = modules_opt
@@ -644,8 +741,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           def _build_controller(self):
 
               logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                    self._run_start_date.strftime(date_fmt_cesm),
-                                                    self._run_end_date.strftime(date_fmt_cesm))
+                                                    self._run_start_date.strftime(date_fmt['cesm']),
+                                                    self._run_end_date.strftime(date_fmt['cesm']))
               with open(os.path.join(self.path, 'controller'), mode='w') as script:
                   # shebang
                   script.write('{:s}\n\n'.format(self.shebang))
@@ -693,12 +790,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                       # pgi version
                       if self.pgi_version is not None:
                           script.write('module unload pgi\n')
-                          if self.pgi_version == '17.10.0':
-                              script.write('module use /apps/common/UES/pgi/17.10/modulefiles\n')
-                              script.write('module load pgi/17.10\n')
-                              script.write('export PGI_VERS_STR=17.10.0\n')
-                          else:
-                              script.write('module load pgi/{:s}\n'.format(self.pgi_version))
+                          script.write('module load pgi/{:s}\n'.format(self.pgi_version))
 
                       # other modules
                       script.write('module load daint-gpu\n')
@@ -713,8 +805,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           def _update_controller(self):
               logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                    self._run_start_date.strftime(date_fmt_cesm),
-                                                    self._run_end_date.strftime(date_fmt_cesm))
+                                                    self._run_start_date.strftime(date_fmt['cesm']),
+                                                    self._run_end_date.strftime(date_fmt['cesm']))
               rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
                        '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
               with open(os.path.join(self.path, 'controller'), mode='r+') as f:
@@ -759,18 +851,19 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
 
           def _build_proc_config(self):
+
               # Build executable bash files
               f_path = os.path.join(self.path, 'cosmo.bash')
               with open(f_path, 'w') as f:
                   f.write("#!/bin/bash\n")
                   f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
-                  f.write("./{:s}".format(self.COSMO_exe))
+                  f.write("./{:s}".format(self.cos_exe))
               os.chmod(f_path, 0o755)
               f_path = os.path.join(self.path, 'cesm.bash')
               with open(f_path, 'w') as f:
                   f.write("#!/bin/bash\n")
                   f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
-                  f.write("./{:s}".format(self.CESM_exe))
+                  f.write("./{:s}".format(self.cesm_exe))
               os.chmod(f_path, 0o755)
 
               # Build proc_config
@@ -796,7 +889,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           _n_tasks_per_node = 24
 
           def __init__(self, wall_time='08:00:00', account=None, partition=None,
-                       ,**base_case_args):
+                       **base_case_args):
               self.wall_time = wall_time
               self.account = account
               self.partition = partition
@@ -814,8 +907,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           def _build_controller(self):
               logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                    self._run_start_date.strftime(date_fmt_cesm),
-                                                    self._run_end_date.strftime(date_fmt_cesm))
+                                                    self._run_start_date.strftime(date_fmt['cesm']),
+                                                    self._run_end_date.strftime(date_fmt['cesm']))
               with open(os.path.join(self.path, 'controller'), mode='w') as script:
                   # shebang
                   script.write('#!/usr/bin/env bash\n')
@@ -847,8 +940,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           def _update_controller(self):
               logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                                    self._run_start_date.strftime(date_fmt_cesm),
-                                                    self._run_end_date.strftime(date_fmt_cesm))
+                                                    self._run_start_date.strftime(date_fmt['cesm']),
+                                                    self._run_end_date.strftime(date_fmt['cesm']))
               rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
                        '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
               with open(os.path.join(self.path, 'controller'), mode='r+') as f:
@@ -898,7 +991,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               self[name].write(os.path.join(self.cc2case.path, name), force=True)
 
           def write_all(self):
-              for name, nml in self.items():
+              for name in self:
                   self.write(name)
     #+END_SRC
 
@@ -910,9 +1003,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations
     #+BEGIN_SRC python
       from __future__ import print_function
       from .cc2_case import factory as cc2_case_factory, available_cases
-      from .date_formats import date_fmt_in, date_fmt_cosmo
+      from .tools import date_fmt, get_xml_node_args
       from subprocess import check_call
-      from argparse import ArgumentParser, RawTextHelpFormatter
+      from argparse import ArgumentParser, RawTextHelpFormatter, Action as arg_action
       import f90nml
       from datetime import datetime, timedelta
       import os
@@ -922,18 +1015,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 *** create_case
     - [ ] For now, no choice for the I/O directory structure. Maybe no
       need to implement this.
-    - [ ] Do first transfering namelists, then create case, then transfer input
-    - [ ] Implement defaults in a cleaner way:
-      - keep them in the case class ~__init__~ funtion and only
-        provide none empty options after merging setup.xml and command
-        line.
-      - A correspondance between command line / setup file options
-        name and class arguments is still needed ... or stick to the
-        same names!
-      - Use ~vars(parser.parse_args())~ to get a dict, retain only
-        none ~None~ options to build the arguments dict for the case
-        constructor and then add xml options to it when not already
-        defined.
     #+BEGIN_SRC python
       def create_case():
           """
@@ -942,15 +1023,35 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           See ``cc2_create_case --help``
           """
 
-          # Parse setup options from command line and xml file
-          # ==================================================
+          # Build command line parser
+          # =========================
 
-          # Options from command line
-          # -------------------------
+          # Custom action factory to fill in cc2_cmd_args dictionnary
+          cc2_cmd_args = {}
+          case_actions = {}
+
+          def cc2_act(*groups):
+
+              for group in groups:
+                  if group not in cc2_cmd_args:
+                      cc2_cmd_args[group] = {}
+
+              key = '.'.join(groups)
+
+              if key not in case_actions:
+                  def call(self, parser, args, values, option_string=None):
+                      for group in self.cc2_groups:
+                          cc2_cmd_args[group][self.dest] = values
+                  name = 'cc2_' + '_'.join(groups)
+                  case_actions[key] = type(name, (arg_action,),{'__call__': call, 'cc2_groups': groups})
+
+              return case_actions[key]
+
+          # function for boolean type
           def str_to_bool(val_str):
               return bool(eval(val_str))
 
-
+          # Create parser
           dsc = "Set up and run a COSMO_CLM2 case\n"\
                 "--------------------------------\n"\
                 "Options can be set up either by xml file or the following command line arguments.\n"\
@@ -959,60 +1060,80 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                 "Command line arguments have precedence over xml file ones."
           parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
           main_group = parser.add_argument_group('main', 'Options common to all machines')
-          main_group.add_argument('--machine', metavar='MACH', choices=['daint', 'mistral'],
+          main_group.add_argument('--machine', metavar='MACH', action=cc2_act('main'),
                                   help="machine on which the case is running (default: has to be given \n"\
                                   "either by the command line or the xml setup file)")
           main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
-          main_group.add_argument('--name', help="case name (default: COSMO_CLM2)")
-          main_group.add_argument('--path', help="directory where the case is set up (default: $SCRATCH/NAME on daint)")
-          main_group.add_argument('--cosmo_only', type=str_to_bool, help="run only cosmo with build-in soil model TERRA\n"\
+          main_group.add_argument('--name', action=cc2_act('main'), help="case name (default: COSMO_CLM2)")
+          main_group.add_argument('--install_dir', action=cc2_act('main'),
+                                  help="directory where the case is installed (default: $SCRATCH on daint)")
+          main_group.add_argument('--cosmo_only', action=cc2_act('main'), type=str_to_bool,
+                                  help="run only cosmo with build-in soil model TERRA\n"\
                                   "(type: bool, using anything Python can parse as a boolean, default: False)\n"\
                                   "Be carefull to provide a COSMO executable compiled accordingly")
-          main_group.add_argument('--start_date', metavar='DATE_1',
+          main_group.add_argument('--start_date', metavar='DATE_1', action=cc2_act('main'),
                                   help="simulation start date formatted as YYYY-MM-DD-HH")
-          main_group.add_argument('--end_date', metavar='DATE_2',
+          main_group.add_argument('--end_date', metavar='DATE_2', action=cc2_act('main'),
                                   help="simulation end date formatted as YYYY-MM-DD-HH")
-          main_group.add_argument('--run_length', metavar='dt',
+          main_group.add_argument('--run_length', metavar='dt', action=cc2_act('main'),
                                   help="sets simulation length if end_date not specified or run length\n"\
                                   "between restarts otherwise\n"\
                                   "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'\n"\
                                   "N1, N2 and N3 being arbitrary integers (N2>12 possible) and\n"\
                                   "'y', 'm' and 'd' stand for year, month and day")
-          main_group.add_argument('--cos_in', help="COSMO input files directory (default: ./COSMO_input)")
-          main_group.add_argument('--cos_nml', help="COSMO namelists directory (default: ./COSMO_nml)")
-          main_group.add_argument('--cos_exe', help="path to COSMO executable (default: ./cosmo)")
-          main_group.add_argument('--cesm_in', help="CESM input files directory (default: ./CESM_input)")
-          main_group.add_argument('--cesm_nml', help="CESM namelists directory (default: ./CESM_nml)")
-          main_group.add_argument('--cesm_exe', help="CESM executable (default: ./cesm.exe)")
-          main_group.add_argument('--oas_in', help="OASIS input files directory (default: ./OASIS_input)")
-          main_group.add_argument('--oas_nml', help="OASIS namelists directory (default: ./OASIS_nml)")
-          main_group.add_argument('--ncosx', type=int, help="number of subdomains along the 'x-axis'\n"\
+          main_group.add_argument('--cos_in', action=cc2_act('main'),
+                                  help="COSMO input files directory (default: ./COSMO_input)")
+          main_group.add_argument('--cos_nml', action=cc2_act('main'),
+                                  help="COSMO namelists directory (default: ./COSMO_nml)")
+          main_group.add_argument('--cos_exe', action=cc2_act('main'),
+                                  help="path to COSMO executable (default: ./cosmo)")
+          main_group.add_argument('--cesm_in', action=cc2_act('main'),
+                                  help="CESM input files directory (default: ./CESM_input)")
+          main_group.add_argument('--cesm_nml', action=cc2_act('main'),
+                                  help="CESM namelists directory (default: ./CESM_nml)")
+          main_group.add_argument('--cesm_exe', action=cc2_act('main'),
+                                  help="CESM executable (default: ./cesm.exe)")
+          main_group.add_argument('--oas_in', action=cc2_act('main'),
+                                  help="OASIS input files directory (default: ./OASIS_input)")
+          main_group.add_argument('--oas_nml', action=cc2_act('main'),
+                                  help="OASIS namelists directory (default: ./OASIS_nml)")
+          main_group.add_argument('--ncosx', action=cc2_act('main'), type=int,
+                                  help="number of subdomains along the 'x-axis'\n"\
                                   "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
-          main_group.add_argument('--ncosy', type=int, help="number of subdomains along the 'y-axis'\n"\
+          main_group.add_argument('--ncosy', action=cc2_act('main'), type=int,
+                                  help="number of subdomains along the 'y-axis'\n"\
                                   "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
-          main_group.add_argument('--ncosio', type=int, help="number of cores dedicated to i/o work'\n"\
+          main_group.add_argument('--ncosio', action=cc2_act('main'), type=int,
+                                  help="number of cores dedicated to i/o work'\n"\
                                   "(type: int, default: from INPUT_ORG namelist)")
-          main_group.add_argument('--ncesm', type=int, help="number of subdomains for CESM domain decomposition'\n"\
+          main_group.add_argument('--ncesm', action=cc2_act('main'), type=int,
+                                  help="number of subdomains for CESM domain decomposition'\n"\
                                   "(type: int, default: from drv_in namelist)")
-          main_group.add_argument('--gpu_mode', type=str_to_bool,
+          main_group.add_argument('--gpu_mode', action=cc2_act('main'), type=str_to_bool,
                                   help="run COSMO on gpu (type: bool, using anything Python can parse as a boolean,\n"\
                                   "default: False)")
-          main_group.add_argument('--dummy_day', type=str_to_bool,
+          main_group.add_argument('--dummy_day', action=cc2_act('main'), type=str_to_bool,
                                   help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                                   "(type: bool, using anything Python can parse as a boolean, default: True)")
 
-          slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager')
-          slurm_group.add_argument('--wall_time', help="reserved time on compute nodes\n"\
+          slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager.\n'\
+                                                  '(common to all machines using the slurm scheduler)')
+          slurm_group.add_argument('--wall_time', action=cc2_act('daint', 'mistral'),
+                                   help="reserved time on compute nodes\n"\
                                    "(default: '24:00:00' on daint, '08:00:00' on mistral)")
-          slurm_group.add_argument('--account', help="account to use for batch script\n"\
+          slurm_group.add_argument('--account', action=cc2_act('daint', 'mistral'),
+                                   help="account to use for batch script\n"\
                                    "(default: infered from $PROJECT on daint, None on mistral)")
-          slurm_group.add_argument('--partition', help="select a queue (default: None)")
+          slurm_group.add_argument('--partition', action=cc2_act('daint', 'mistral'),
+                                   help="select a queue (default: None)")
 
           daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
-          daint_group.add_argument('--modules_opt', choices=['switch', 'none', 'purge'],
+          daint_group.add_argument('--modules_opt', action=cc2_act('daint'), choices=['switch', 'none', 'purge'],
                                    help="Option for loading modules at run time (default: switch)")
-          daint_group.add_argument('--pgi_version', help="specify pgi compiler version at run time (default: None)")
-          daint_group.add_argument('--shebang', help="submit script shebang (default: #!/bin/bash)")
+          daint_group.add_argument('--pgi_version', action=cc2_act('daint'),
+                                   help="specify pgi compiler version at run time (default: None)")
+          daint_group.add_argument('--shebang', action=cc2_act('daint'),
+                                   help="submit script shebang (default: #!/usr/bin/env bash)")
 
           cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
           cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
@@ -1024,173 +1145,19 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                                       "only command line argument, cannot be set in xml file\n")
 
           opts = parser.parse_args()
-          if opts.gen_oasis:
-              print('Generate OASIS input file: the code will crash after creating the files')
-              opts.dummy_day = False
 
-          # Set options to xml value if needed or default if nothing provided then perform some checks
-          # ------------------------------------------------------------------------------------------
-          # options defaults
-          defaults = {'main': {'machine': None, 'name': 'COSMO_CLM2', 'path': None,
-                               'cosmo_only': False, 'gen_oasis': False,
-                               'start_date': None, 'end_date': None, 'run_length': None,
-                               'cos_in': './COSMO_input', 'cos_nml': './COSMO_nml', 'cos_exe': './cosmo',
-                               'cesm_in': './CESM_input', 'cesm_nml': './CESM_nml', 'cesm_exe': './cesm.exe',
-                               'oas_in': './OASIS_input', 'oas_nml': './OASIS_nml',
-                               'ncosx': None, 'ncosy': None, 'ncosio': None, 'ncesm': None,
-                               'dummy_day': True, 'gpu_mode': False},
-                      'daint': {'wall_time': '24:00:00', 'account': None, 'partition': None,
-                                'modules_opt': 'switch', 'pgi_version': None, 'shebang': '#!/bin/bash'},
-                      'mistral': {'wall_time': '08:00:00', 'account': None, 'partition': None}}
-
-          # Apply default main options
-          if opts.setup_file is not None:
-              tree = ET.parse(opts.setup_file)
-              xml_node = tree.getroot().find('main')
-          else:
-              xml_node = None
-          apply_defaults(opts, xml_node, defaults['main'])
-
-          # Check machine
-          if opts.machine is None:
-              raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
-          elif opts.machine not in available_cases:
-              raise ValueError("invalid 'machine' option. Has to be either of " + str(list(available_cases.keys())))
-
-          # Apply default machine specific options
-          if opts.machine not in defaults:
-              raise NotImplementedError("default options not implemented for machine {:s}".format(opts.machine))
-          else:
-              if opts.setup_file is not None:
-                  tree = ET.parse(opts.setup_file)
-                  xml_node = tree.getroot().find(opts.machine)
-              else:
-                  xml_node = None
-              apply_defaults(opts, xml_node, defaults[opts.machine])
-
-          # Check case path
-          # - ML - that will go to the daint_case class as soon as cleaner defaults are implemented
-          if opts.path is None:
-              if opts.machine == 'daint':
-                  opts.path = os.path.join(os.environ['SCRATCH'], opts.name)
-              else:
-                  raise NotImplementedError("default path not implemented for machine {:s}".format(opts.machine))
-
-          # Log
-          # ===
-          log = 'Setting up case {:s} in {:s}'.format(opts.name, opts.path)
-          print(log + '\n' + '-' * len(log))
-
-          # Transfer data
-          # =============
-          # - ML - For now, no choice for the I/O directory structure
-          # - ML - Do first transfering namelists, then create case, then transfer input
-          if not os.path.exists(opts.path):
-              os.makedirs(opts.path)
-          INPUT_IO = f90nml.read(os.path.join(opts.cos_nml, 'INPUT_IO'))
-          dh = INPUT_IO['gribin']['hincbound']
-          ext =''
-          if 'yform_read' in INPUT_IO['ioctl'].keys():
-              if INPUT_IO['ioctl']['yform_read'] == 'ncdf':
-                  ext = '.nc'
-          transfer_COSMO_input(opts.cos_in, opts.path+'/COSMO_input',
-                               opts.start_date, opts.end_date,
-                               opts.run_length, dh, opts.dummy_day, ext)
-          check_call(['rsync', '-avrL', opts.cos_nml+'/', opts.path])
-          check_call(['rsync', '-avrL', opts.cos_exe, opts.path])
-          if not opts.cosmo_only:
-              check_call(['rsync', '-avrL', opts.cesm_in+'/', opts.path+'/CESM_input/'])
-              check_call(['rsync', '-avrL', opts.cesm_nml+'/', opts.path])
-              check_call(['rsync', '-avrL', opts.cesm_exe, opts.path])
-              if not opts.gen_oasis:
-                  check_call(['rsync', '-avrL', opts.oas_in+'/', opts.path])
-              else:
-                  print('generate OASIS file:')
-                  for f in os.listdir(opts.oas_in):
-                      try:
-                          print('   removing ' +  os.path.join(opts.path, f))
-                          os.remove(os.path.join(opts.path, f))
-                      except OSError:
-                          pass
-              check_call(['rsync', '-avrL', opts.oas_nml+'/', opts.path])
+          # Parse machine and case argumennts from cmd line args and xml file
+          # =================================================================
+          machine, cc2_args = get_case_args(opts, cc2_cmd_args)
+          print('- ML - DBG: cc2_args = ', cc2_args)
 
           # Create case instance
           # ====================
-          # base arguments
-          case_args = {'name': opts.name, 'path': opts.path,
-                       'cosmo_only': opts.cosmo_only, 'gen_oasis': opts.gen_oasis,
-                       'start_date': opts.start_date, 'end_date': opts.end_date,
-                       'run_length': opts.run_length, 'COSMO_exe': os.path.basename(opts.cos_exe),
-                       'CESM_exe': os.path.basename(opts.cesm_exe), 'ncosx': opts.ncosx,
-                       'ncosy': opts.ncosy, 'ncosio': opts.ncosio, 'ncesm': opts.ncesm,
-                       'gpu_mode': opts.gpu_mode, 'dummy_day': opts.dummy_day}
-          # machine specific arguments
-          if opts.machine == 'daint':
-              machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
-                              'partition': opts.partition,'modules_opt': opts.modules_opt,
-                              'pgi_version': opts.pgi_version, 'shebang': opts.shebang}
-          elif opts.machine == 'mistral':
-              machine_args = {'wall_time': opts.wall_time, 'account': opts.account,
-                              'partition': opts.partition}
-          else:
-              raise NotImplementedError("machine_args dict not implemented for machine {:s}".format(opts.machine))
-          case_args.update(machine_args)
-          # create case instance
-          cc2case = cc2_case_factory(opts.machine, **case_args)
+          cc2case = cc2_case_factory(machine, **cc2_args)
 
           # Change/delete namelists parameters following xml file
           # =====================================================
-          if opts.setup_file is not None:
-              # Modify namelist parameters
-              nodes = tree.getroot().findall('change_par')
-              if nodes:
-                  for node in nodes:
-                      name = node.get('file')
-                      block = node.get('block')
-                      n = node.get('n')
-                      param = node.get('param')
-                      val_str = node.text
-                      if name is None:
-                          raise ValueError("'file' xml attribute is required to change parameter")
-                      if block is None:
-                          raise ValueError("'block' xml attribute is required to change parameter")
-                      if param is None:
-                          raise ValueError("'param' xml attribute is required to change parameter")
-                      if node.get('type') is None:
-                          value = val_str
-                      elif node.get('type') == 'py_eval':
-                          value = eval(val_str)
-                      else:
-                          val_type = eval(node.get('type'))
-                          if isinstance(val_type, type):
-                              value = val_type(val_str)
-                          else:
-                              err_mess = "Given xml atribute 'type' for parameter {:s} is {:s}\n"\
-                                         "It has to be either 'py_eval' or a valid build in python type"
-                              raise ValueError(err_mess.format(param, val_type))
-                      if n is None:
-                          cc2case.nml[name][block][param] = value
-                      else:
-                          cc2case.nml[name][block][int(n)-1][param] = value
-
-              # Delete namelist parameters
-              nodes = tree.getroot().findall('del_par')
-              if nodes:
-                  for node in nodes:
-                      name = node.get('file')
-                      block = node.get('block')
-                      n = node.get('n')
-                      param = node.get('param')
-                      if name is None:
-                          raise ValueError("'file' xml attribute is required to delete parameter")
-                      if block is None:
-                          raise ValueError("'block' xml attribute is required to delete parameter")
-                      if param is None:
-                          raise ValueError("'param' xml attribute is required to delete parameter")
-                      if n is None:
-                          del cc2case.nml[name][block][param]
-                      else:
-                          del cc2case.nml[name][block][int(n)-1][param]
+          modify_nml_from_xml(cc2case, opts)
 
           # Finalize
           # ========
@@ -1202,141 +1169,110 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           if opts.submit:
               cc2case.submit()
     #+END_SRC
-*** add_time_from_str
-     #+BEGIN_SRC python
-       def add_time_from_str(date1, dt_str):
-           """Increment date from a string
-
-           Return the date resulting from date + N1 years + N2 months or date + N3 days
-           where dt_str is a string of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d',
-           N1, N2 and N3 being arbitrary integers potentially including sign and
-           'y', 'm' and 'd' the actual letters standing for year, month and day respectivly."""
-
-           ky, km, kd, ny, nm, nd = 0, 0, 0, 0, 0, 0
-           for k, c in enumerate(dt_str):
-               if c == 'y':
-                   ky, ny = k, int(dt_str[0:k])
-               if c == 'm':
-                   km, nm = k, int(dt_str[ky:k])
-
-           if km == 0 and ky == 0:
-               for k, c in enumerate(dt_str):
-                   if c == 'd':
-                       kd, nd = k, int(dt_str[0:k])
-               if kd == 0:
-                   raise ValueError("date increment '" + dt_str + "' doesn't have the correct format")
-               else:
-                   return date1 + timedelta(days=nd)
-           else:
-               y2, m2, d2, h2 = date1.year, date1.month, date1.day, date1.hour
-               y2 += ny + (nm+m2-1) // 12
-               m2 = (nm+m2-1) % 12 + 1
-               return datetime(y2, m2, d2, h2)
-     #+END_SRC
-
-*** apply_defaults
+*** get_case_args
     #+BEGIN_SRC python
-      def apply_defaults(opts, xml_node, defaults):
-          """Set options with opts > xml_file > defaults"""
-          for opt, default  in defaults.items():
-              apply_def = False
-              if getattr(opts, opt) is None:
-                  if xml_node is None:
-                      apply_def = True
-                  else:
-                      xml_opt = xml_node.find(opt)
-                      if xml_opt is None:
-                          apply_def = True
-                      else:
-                          opt_val_str = xml_opt.text
-                          if opt_val_str is None:
-                              apply_def = True
-                          else:
-                              if xml_opt.get('type') is None:
-                                  setattr(opts, opt, opt_val_str)
-                              elif xml_opt.get('type') == 'py_eval':
-                                  setattr(opts, opt, eval(opt_val_str))
-                              else:
-                                  opt_type = eval(xml_opt.get('type'))
-                                  if isinstance(opt_type, type):
-                                      setattr(opts, opt, opt_type(opt_val_str))
-                                  else:
-                                      raise ValueError("xml atribute 'type' for option {:s}".format(opt)
-                                                       + " is not a valid python type nor 'py_eval'")
-              if apply_def:
-                  setattr(opts, opt, default)
-    #+END_SRC
+      def get_case_args(cmd_opts, cc2_cmd_args):
 
-*** transfer_COSMO_input
-    #+BEGIN_SRC python
-      def transfer_COSMO_input(src_dir, target_dir, start_date, end_date,
-                               run_length, dh, dummy_day, ext):
+          if cmd_opts.gen_oasis:
+              cc2_cmd_args['main']['dummy_day'] = False
 
-          d1 = datetime.strptime(start_date, date_fmt_in)
-          if end_date is None:
-              if run_length is None:
-                  raise ValueError("if end_date is none, provide run_length")
-              else:
-                  d2 = add_time_from_str(d1, run_length)
+          if 'machine' in cc2_cmd_args['main']:
+              machine = cc2_cmd_args['main']
           else:
-              d2 = datetime.strptime(end_date, date_fmt_in)
-          delta = timedelta(seconds=dh*3600.0)
+              machine = None
 
-          def check_input(root, date, file_list, dummy=False):
-              file_name = root + format(date.strftime(date_fmt_cosmo)) + ext
-              if os.path.exists(os.path.join(src_dir, file_name)):
-                  file_list.write(file_name + '\n')
-                  return True
-              elif dummy:
-                  raise ValueError("Creating dummy input files: no tool available on Piz Daint\n"\
-                                   "to alter the date of the input file, wether grib or netcdf.\n"\
-                                   "Please proceed manually.")
-                  # dummy_date = datetime(d1.year, d1.month, d1.day, date.hour)
-                  # dummy_file_name = root + format(dummy_date.strftime(date_fmt_cosmo)) + ext
-                  # msg = "WARNING: Copying {:s} as {:s} for additionnal dummy day (produce last COSMO output)"
-                  # print(msg.format(dummy_file_name, file_name))
-                  # in_file = os.path.join(src_dir, dummy_file_name)
-                  # out_file = os.path.join(target_dir, file_name)
-                  # if ext == '':
-                  #     check_call(['grib_set', '-s', 'dataDate={:s}'.format(dummy_date.strftime('%Y%m%d')),
-                  #                 in_file, out_file])
-                  # else:
-                  #     raise ValueError("Creating dummy input files: no tool available on Piz Daint\n"\
-                  #                      "to alter the date of netcdf file, please proceed manually.")
-                  #     # shutil.copy(in_file, out_file)
-                  # return False
-              else:
-                  raise ValueError("input file {:s} is missing".format(file_name))
+          xml_file = cmd_opts.setup_file
+          if xml_file:
+              tree_root = ET.parse(xml_file).getroot()
+              main_node = tree_root.find('main')
+              if machine is None:
+                  machine_name_node = main_node.find('machine')
+                  if machine_name_node is not None:
+                      machine = machine_name_node.text
+              machine_node = tree_root.find(machine)
 
-          # Check all input files for current period
-          with open('transfer_list', mode ='w') as t_list:
-              check_input('laf', d1, t_list)
-              cur_date = d1
-              while cur_date <= d2:
-                  check_input('lbfd', cur_date, t_list)
-                  cur_date += delta
-          check_call(['rsync', '-avr', '--files-from', 'transfer_list',
-                      os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
+          if machine is None:
+              raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
 
-          # Add a dummy day to produce last COSMO output
-          if dummy_day:
-              do_transfer = False
-              with open('transfer_list', mode ='w') as t_list:
-                  while cur_date <= d2 + timedelta(days=1):
-                      do_transfer = do_transfer or check_input('lbfd', cur_date, t_list, dummy=True)
-                      cur_date += delta
-              if do_transfer:
-                  check_call(['rsync', '-avr', '--files-from', 'transfer_list',
-                              os.path.normpath(src_dir)+'/', os.path.normpath(target_dir)+'/'])
+          main_args = get_xml_node_args(main_node, exclude=('machine'))
+          main_args.update(cc2_cmd_args['main'])
 
-          if os.path.exists('transfer_list'):
-              os.remove('transfer_list')
+          machine_args = get_xml_node_args(machine_node)
+          machine_args.update(cc2_cmd_args[machine])
+
+          cc2_args = {k:v for k,v in main_args.items() if v is not None}
+          cc2_args.update({k:v for k,v in machine_args.items() if v is not None})
+          cc2_args['install'] = True
+
+          return machine, cc2_args
     #+END_SRC
+*** modify_nml_from_xml
+    #+BEGIN_SRC python
+      def modify_nml_from_xml(cc2case, cmd_opts):
+          """Modify case namelists following instructions from xml setup file"""
 
+          if cmd_opts.setup_file is None:
+              return
+    
+          tree_root = ET.parse(cmd_opts.setup_file).getroot()
+
+          # Change parameters
+          nodes = tree_root.findall('change_par')
+          if nodes:
+              for node in nodes:
+                  name = node.get('file')
+                  block = node.get('block')
+                  n = node.get('n')
+                  param = node.get('param')
+                  val_str = node.text
+                  if name is None:
+                      raise ValueError("'file' xml attribute is required to change parameter")
+                  if block is None:
+                      raise ValueError("'block' xml attribute is required to change parameter")
+                  if param is None:
+                      raise ValueError("'param' xml attribute is required to change parameter")
+                  if node.get('type') is None:
+                      value = val_str
+                  elif node.get('type') == 'py_eval':
+                      value = eval(val_str)
+                  else:
+                      val_type = eval(node.get('type'))
+                      if isinstance(val_type, type):
+                          value = val_type(val_str)
+                      else:
+                          err_mess = "Given xml atribute 'type' for parameter {:s} is {:s}\n"\
+                                     "It has to be either 'py_eval' or a valid build in python type"
+                          raise ValueError(err_mess.format(param, val_type))
+                  if n is None:
+                      cc2case.nml[name][block][param] = value
+                  else:
+                      cc2case.nml[name][block][int(n)-1][param] = value
+
+          # Delete parameters
+          nodes = tree_root.findall('del_par')
+          if nodes:
+              for node in nodes:
+                  name = node.get('file')
+                  block = node.get('block')
+                  n = node.get('n')
+                  param = node.get('param')
+                  if name is None:
+                      raise ValueError("'file' xml attribute is required to delete parameter")
+                  if block is None:
+                      raise ValueError("'block' xml attribute is required to delete parameter")
+                  if param is None:
+                      raise ValueError("'param' xml attribute is required to delete parameter")
+                  if n is None:
+                      del cc2case.nml[name][block][param]
+                  else:
+                      del cc2case.nml[name][block][int(n)-1][param]
+
+    #+END_SRC
 ** control_case.py
    - [ ] The xml part of it could go to a bla_from_xml factory function
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/control_case.py :comments no
      from .cc2_case import factory as cc2_case_factory
+     from .tools import get_xml_node_args
      from argparse import ArgumentParser, RawTextHelpFormatter
      import xml.etree.ElementTree as ET
 
@@ -1353,26 +1289,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations
          machine_node = config.find('machine')
          if machine_node is None:
              raise ValueError("machine node not found in {:s}".format(xml_file))
-         else:
-             machine = machine_node.text
-
-         args={}
-         for opt in config.iter():
-             if opt is not config and opt is not machine_node:
-                 if opt.get('type') is None:
-                     args[opt.tag] = opt.text
-                 elif opt.get('type') == 'py_eval':
-                     args[opt.tag] = eval(opt.text)
-                 else:
-                     opt_type = eval(opt.get('type'))
-                     if isinstance(opt_type, type):
-                         args[opt.tag] = opt_type(opt.text)
-                     else:
-                         raise ValueError("xml atribute 'type' for option {:s}".format(opt.tag)
-                                          + " has to be a valid python type or 'py_eval'")
-
-
-         cc2case = cc2_case_factory(machine, **args)
+         machine = machine_node.text
+         case_args = get_xml_node_args(config, exclude=('machine',))
+         cc2case = cc2_case_factory(machine, **case_args)
 
          # Run
          cc2case.run()
@@ -1382,11 +1301,65 @@ Tools for automated creation and run of COSMO_CLM2 simulations
              cc2case.submit()
    #+END_SRC
 
-** date_formats.py
-   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/date_formats.py :comments no
-     date_fmt_in = '%Y-%m-%d-%H'
-     date_fmt_cosmo = '%Y%m%d%H'
-     date_fmt_cesm = '%Y%m%d'
+** tools.py
+   #+BEGIN_SRC python :tangle COSMO_CLM2_tools/tools.py :comments no
+     date_fmt = {'in': '%Y-%m-%d-%H', 'cosmo': '%Y%m%d%H','cesm': '%Y%m%d'}
+
+
+     def add_time_from_str(date1, dt_str):
+         """Increment date from a string
+
+         Return the date resulting from date + N1 years + N2 months or date + N3 days
+         where dt_str is a string of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d',
+         N1, N2 and N3 being arbitrary integers potentially including sign and
+         'y', 'm' and 'd' the actual letters standing for year, month and day respectivly."""
+
+         ky, km, kd, ny, nm, nd = 0, 0, 0, 0, 0, 0
+         for k, c in enumerate(dt_str):
+             if c == 'y':
+                 ky, ny = k, int(dt_str[0:k])
+             if c == 'm':
+                 km, nm = k, int(dt_str[ky:k])
+
+         if km == 0 and ky == 0:
+             for k, c in enumerate(dt_str):
+                 if c == 'd':
+                     kd, nd = k, int(dt_str[0:k])
+             if kd == 0:
+                 raise ValueError("date increment '" + dt_str + "' doesn't have the correct format")
+             else:
+                 return date1 + timedelta(days=nd)
+         else:
+             y2, m2, d2, h2 = date1.year, date1.month, date1.day, date1.hour
+             y2 += ny + (nm+m2-1) // 12
+             m2 = (nm+m2-1) % 12 + 1
+             return datetime(y2, m2, d2, h2)
+
+
+     def get_xml_node_args(node, exclude=()):
+         """Read case arguments from xml node"""
+
+         if node is None:
+             return {}
+
+         xml_args = {}
+
+         for opt in node.iter():
+             if opt is not node and opt.tag not in exclude:
+                 if opt.get('type') is None:
+                     xml_args[opt.tag] = opt.text
+                 elif opt.get('type') == 'py_eval':
+                     xml_args[opt.tag] = eval(opt.text)
+                 else:
+                     opt_type = eval(opt.get('type'))
+                     if isinstance(opt_type, type):
+                         xml_args[opt.tag] = opt_type(opt.text)
+                     else:
+                         raise ValueError("xml atribute 'type' " + opt.get('type')
+                                          + " for node " + opt.tag
+                                          + " has to be a valid python type or 'py_eval'")
+
+         return xml_args
    #+END_SRC
 ** __init__.py
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/__init__.py :comments no
