@@ -653,12 +653,12 @@ class daint_case(cc2_case):
 
     def _build_proc_config(self):
 
-        # build executable bash files
+        # Build executable bash files
         f_path = os.path.join(self.path, 'cosmo.bash')
         with open(f_path, 'w') as f:
             f.write("#!/bin/bash\n")
             f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
-            f.write("./{:s}".format(self.cosmo_exe))
+            f.write("./{:s}".format(self.cos_exe))
         os.chmod(f_path, 0o755)
         f_path = os.path.join(self.path, 'cesm.bash')
         with open(f_path, 'w') as f:
@@ -667,7 +667,7 @@ class daint_case(cc2_case):
             f.write("./{:s}".format(self.cesm_exe))
         os.chmod(f_path, 0o755)
 
-        # build proc_config file
+        # Build proc_config
         with open(os.path.join(self.path, 'proc_config'), mode='w') as f:
             if self.gpu_mode:
                 N = self._n_tasks_per_node
