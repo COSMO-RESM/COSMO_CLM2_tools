@@ -13,11 +13,9 @@ def control_case():
 
     # build cc2case object from xml file
     config = ET.parse(cfg.xml_path).getroot()
-    machine_node = config.find('machine')
-    if machine_node is None:
-        raise ValueError("machine node not found in {:s}".format(xml_file))
-    machine = machine_node.text
-    case_args = get_xml_node_args(config, exclude=('machine',))
+    machine = config.find('machine').text
+    case_args = get_xml_node_args(config.find('main'))
+    case_args.update(get_xml_node_args(config.find(machine)))
     cc2case = cc2_case_factory(machine, **case_args)
 
     # Run

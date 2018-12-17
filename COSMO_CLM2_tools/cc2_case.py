@@ -39,15 +39,19 @@ class cc2_case(object):
                  gpu_mode=False, dummy_day=True, cosmo_only=False,
                  gen_oasis=False):
 
+        # Basic init (no particular work required)
+        self.run_length = run_length
+        self.gpu_mode = gpu_mode
+        self.dummy_day = dummy_day
         self.cosmo_only = cosmo_only
+        self.gen_oasis = gen_oasis
+        self.cos_in = os.path.abspath(cos_in)
         # Create namelists dictionnary
         self.nml = nmldict(self)
         # Set case name, install_dir and path
         self._name = name
         self.install_dir = install_dir   # also sets self._path
         # Install: transfer namelists, executables and input files
-        self.cos_in = os.path.abspath(cos_in)
-        self.gen_oasis = gen_oasis
         if install:
             log = 'Setting up case {:s} in {:s}'.format(self._name, self._path)
             print(log + '\n' + '-' * len(log))
@@ -57,10 +61,6 @@ class cc2_case(object):
         self.cos_exe = cos_exe
         if not self.cosmo_only:
             self.cesm_exe = cesm_exe
-        # Basic init (no particular work required)
-        self.run_length = run_length
-        self.gpu_mode = gpu_mode
-        self.dummy_day = dummy_day
         # Settings involving namelist changes
         self.start_date = start_date
         self.end_date = end_date
@@ -79,7 +79,6 @@ class cc2_case(object):
             self._create_missing_dirs()
         # Write namelists object to file
         self.write_open_nml()
-
 
     @property
     def cos_exe(self):
@@ -427,23 +426,26 @@ class cc2_case(object):
                 if level and (not elem.tail or not elem.tail.strip()):
                     elem.tail = i
 
-        config = ET.Element('config')
-        tree = ET.ElementTree(config)
-        ET.SubElement(config, 'name').text = self.name
-        ET.SubElement(config, 'install_dir').text = self.install_dir
-        ET.SubElement(config, 'cosmo_only', type='py_eval').text = str(self.cosmo_only)
-        ET.SubElement(config, 'gen_oasis', type='py_eval').text = str(self.gen_oasis)
-        ET.SubElement(config, 'start_date').text = self.start_date.strftime(date_fmt['in'])
-        ET.SubElement(config, 'end_date').text = self.end_date.strftime(date_fmt['in'])
-        ET.SubElement(config, 'run_length').text = self.run_length
-        ET.SubElement(config, 'cos_exe').text = self.cos_exe
+        config_node = ET.Element('config')
+        tree = ET.ElementTree(config_node)
+        ET.SubElement(config_node, 'machine').text = self._target_machine
+        main_node = ET.SubElement(config_node, 'main')
+        machine_node = ET.SubElement(config_node, self._target_machine)
+        ET.SubElement(main_node, 'name').text = self.name
+        ET.SubElement(main_node, 'install_dir').text = self.install_dir
+        ET.SubElement(main_node, 'cosmo_only', type='py_eval').text = str(self.cosmo_only)
+        ET.SubElement(main_node, 'gen_oasis', type='py_eval').text = str(self.gen_oasis)
+        ET.SubElement(main_node, 'start_date').text = self.start_date.strftime(date_fmt['in'])
+        ET.SubElement(main_node, 'end_date').text = self.end_date.strftime(date_fmt['in'])
+        ET.SubElement(main_node, 'run_length').text = self.run_length
+        ET.SubElement(main_node, 'cos_exe').text = self.cos_exe
         if not self.cosmo_only:
-            ET.SubElement(config, 'cesm_exe').text = self.cesm_exe
-        ET.SubElement(config, 'cos_in').text = self.cos_in
-        ET.SubElement(config, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
-        ET.SubElement(config, 'dummy_day', type='py_eval').text = str(self.dummy_day)
-        self._update_xml_config(config)
-        indent(config)
+            ET.SubElement(main_node, 'cesm_exe').text = self.cesm_exe
+        ET.SubElement(main_node, 'cos_in').text = self.cos_in
+        ET.SubElement(main_node, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
+        ET.SubElement(main_node, 'dummy_day', type='py_eval').text = str(self.dummy_day)
+        self._update_xml_config(machine_node)
+        indent(config_node)
         tree.write(os.path.join(self.path, file_name), xml_declaration=True)
 
 
@@ -632,14 +634,13 @@ class daint_case(cc2_case):
             f.truncate()
 
 
-    def _update_xml_config(self, config):
-        ET.SubElement(config, 'machine').text = 'daint'
-        ET.SubElement(config, 'account').text = self.account
-        ET.SubElement(config, 'wall_time').text = self.wall_time
-        ET.SubElement(config, 'partition').text = self.partition
-        ET.SubElement(config, 'modules_opt').text = self.modules_opt
-        ET.SubElement(config, 'pgi_version').text = self.pgi_version
-        ET.SubElement(config, 'shebang').text = str(self.shebang)
+    def _update_xml_config(self, machine_node):
+        ET.SubElement(machine_node, 'account').text = self.account
+        ET.SubElement(machine_node, 'wall_time').text = self.wall_time
+        ET.SubElement(machine_node, 'partition').text = self.partition
+        ET.SubElement(machine_node, 'modules_opt').text = self.modules_opt
+        ET.SubElement(machine_node, 'pgi_version').text = self.pgi_version
+        ET.SubElement(machine_node, 'shebang').text = str(self.shebang)
 
 
     def _submit_func(self):

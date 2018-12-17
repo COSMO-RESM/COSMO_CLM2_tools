@@ -52,11 +52,11 @@ def create_case():
           "and/or the specific machine (see https://github.com/COSMO-RESM/COSMO_CLM2_tools/blob/master/COSMO_CLM2_tools/default_setup.xml)\n"\
           "Command line arguments have precedence over xml file ones."
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
-    main_group = parser.add_argument_group('main', 'Options common to all machines')
-    main_group.add_argument('--machine', metavar='MACH', action=cc2_act('main'),
-                            help="machine on which the case is running (default: has to be given \n"\
-                            "either by the command line or the xml setup file)")
-    main_group.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
+    parser.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
+    parser.add_argument('--machine', metavar='MACH',
+                        help="machine on which the case is running (default: has to be given \n"\
+                        "either by the command line or the xml setup file)")
+    main_group = parser.add_argument_group('main', 'Case options common to all machines')
     main_group.add_argument('--name', action=cc2_act('main'), help="case name (default: COSMO_CLM2)")
     main_group.add_argument('--install_dir', action=cc2_act('main'),
                             help="directory where the case is installed (default: $SCRATCH on daint)")
@@ -166,17 +166,14 @@ def get_case_args(cmd_opts, cc2_cmd_args):
     if cmd_opts.gen_oasis:
         cc2_cmd_args['main']['dummy_day'] = False
 
-    if 'machine' in cc2_cmd_args['main']:
-        machine = cc2_cmd_args['main']
-    else:
-        machine = None
+    machine = cmd_opts.machine
 
     xml_file = cmd_opts.setup_file
     if xml_file:
         tree_root = ET.parse(xml_file).getroot()
         main_node = tree_root.find('main')
         if machine is None:
-            machine_name_node = main_node.find('machine')
+            machine_name_node = tree_root.find('machine')
             if machine_name_node is not None:
                 machine = machine_name_node.text
         machine_node = tree_root.find(machine)
@@ -184,7 +181,7 @@ def get_case_args(cmd_opts, cc2_cmd_args):
     if machine is None:
         raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
 
-    main_args = get_xml_node_args(main_node, exclude=('machine'))
+    main_args = get_xml_node_args(main_node)
     main_args.update(cc2_cmd_args['main'])
 
     machine_args = get_xml_node_args(machine_node)
