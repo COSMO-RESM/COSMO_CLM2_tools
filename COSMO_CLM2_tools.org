@@ -185,7 +185,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 *** preamble
     #+BEGIN_SRC python
       from __future__ import print_function
-      from .tools import date_fmt, add_time_from_str
+      from .tools import date_fmt, add_time_from_str, COSMO_input_file_name
       from subprocess import check_call
       from argparse import ArgumentParser, RawTextHelpFormatter
       import f90nml
@@ -223,7 +223,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
 
           def __init__(self, name='COSMO_CLM2', install_dir=None, install=False,
-                       cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo',
+                       cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo', cos_in_file_size=None,
                        cesm_nml='./CESM_nml', cesm_in='./CESM_input', cesm_exe='./cesm.exe',
                        oas_in='./OASIS_input', oas_nml='./OASIS_nml',
                        start_date=None, end_date=None, run_length=None,
@@ -237,6 +237,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               self.dummy_day = dummy_day
               self.cosmo_only = cosmo_only
               self.gen_oasis = gen_oasis
+              self.cos_in_file_size = cos_in_file_size
               self.cos_in = os.path.abspath(cos_in)
               # Create namelists dictionnary
               self.nml = nmldict(self)
@@ -266,9 +267,13 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   # - ML - Change this in future versions: only transfer the first chunck of input files
                   self.transfer_cos_in(self.start_date, self.end_date)
                   # Create batch script
+                  # - ML - for later: probably no need to store executable names in config.xml
                   self._build_controller()
                   # Create missing directories
                   self._create_missing_dirs()
+              # Check presence and size of input files
+              # - ML - for later: only for current chunck
+              self._check_COSMO_input(self.start_date, self.end_date)
               # Write namelists object to file
               self.write_open_nml()
 
@@ -343,7 +348,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               if not os.path.exists(self.path):
                   # Create case directory
                   os.makedirs(self.path)
-
+        
               # Transfer everything except COSMO input files
               check_call(['rsync', '-avrL', os.path.abspath(cos_nml)+'/', self.path])
               check_call(['rsync', '-avrL', os.path.abspath(cos_exe), self.path])
@@ -364,22 +369,36 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   check_call(['rsync', '-avrL', os.path.abspath(oas_nml)+'/', self.path])
 
 
-          def transfer_cos_in(self, start_date, end_date):
+          def _cos_input_delta_ext(self):
               # Set time interval between 2 intput files
-              dh = self.nml['INPUT_IO']['gribin']['hincbound']
-              delta = timedelta(seconds=dh*3600.0)
+              delta = timedelta(seconds=self.nml['INPUT_IO']['gribin']['hincbound'])
               # Set file extension
               ext = ''
               if 'yform_read' in self.nml['INPUT_IO']['ioctl']:
                   if self.nml['INPUT_IO']['ioctl']['yform_read'] == 'ncdf':
                       ext = '.nc'
+              return delta, ext
+
+
+          def transfer_cos_in(self, start_date, end_date):
+              delta, ext = self._cos_input_delta_ext()
+              if install:
+                  file_name = COSMO_input_file_name('lbfd', self.start_date, ext)
+                  file_path = os.path.join(self.cos_in, file_name)
+                  self.cos_in_file_size = os.stat(file_path).st_size
+              # function to check and add file to transfer list
+              def check_add_file(root, date, file_list):
+                  file_name = COSMO_input_file_name(root, date, ext)
+                  if os.path.exists(os.path.join(self.cos_in, file_name)):
+                      file_list.write(file_name + '\n')
+                  else:
+                      raise ValueError("input file {:s} is missing from {:s}".format(file_name, self.cos_in))
               # Build file list to transfer
               with open('transfer_list', mode ='w') as t_list:
-                  # - ML - later, only do this when installing case
-                  self._check_COSMO_input('laf', start_date, ext, t_list)
+                  check_add_file('laf', start_date, t_list)
                   cur_date = start_date
                   while cur_date <= end_date:
-                      self._check_COSMO_input('lbfd', cur_date, ext, t_list)
+                      check_add_file('lbfd', cur_date, t_list)
                       cur_date += delta
               # Tranfer files
               check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
@@ -388,12 +407,19 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               os.remove('transfer_list')
 
 
-          def _check_COSMO_input(self, root, date, ext, file_list):
-                    file_name = root + format(date.strftime(date_fmt['cosmo'])) + ext
-                    if os.path.exists(os.path.join(self.cos_in, file_name)):
-                        file_list.write(file_name + '\n')
-                    else:
-                        raise ValueError("input file {:s} is missing from {:s}".format(file_name, self.cos_in))
+          def _check_COSMO_input(self, start_date, end_date):
+              delta, ext = self._cos_input_delta_ext()
+              cur_date = start_date
+              while cur_date <= end_date:
+                  file_name = COSMO_input_file_name('lbfd', cur_date, ext)
+                  file_path = os.path.join(self.path, 'COSMO_input', file_name)
+                  if not os.path.exists(file_path):
+                      raise ValueError("COSMO input file {:s} missing".format(file_name))
+                  fs = os.stat(file_path).st_size
+                  if fs != self.cos_in_file_size:
+                      err_mess = "COSMO input file {:s} has byte size {:d} instead of {:d}"
+                      raise ValueError(err_mess.format(file_name, fs, self.cos_in_file_size))
+                  cur_date += delta
 
 
           def _organize_tasks(self, ncosx, ncosy, ncosio, ncesm):
@@ -631,6 +657,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               ET.SubElement(main_node, 'end_date').text = self.end_date.strftime(date_fmt['in'])
               ET.SubElement(main_node, 'run_length').text = self.run_length
               ET.SubElement(main_node, 'cos_exe').text = self.cos_exe
+              ET.SubElement(main_node, 'cos_in_file_size').text = self.cos_in_file_size
               if not self.cosmo_only:
                   ET.SubElement(main_node, 'cesm_exe').text = self.cesm_exe
               ET.SubElement(main_node, 'cos_in').text = self.cos_in
@@ -1310,6 +1337,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 ** tools.py
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/tools.py :comments no
      date_fmt = {'in': '%Y-%m-%d-%H', 'cosmo': '%Y%m%d%H','cesm': '%Y%m%d'}
+
+     def COSMO_input_file_name(root, date, ext):
+         return root + date.strftime(date_fmt['cosmo']) + ext
 
 
      def add_time_from_str(date1, dt_str):

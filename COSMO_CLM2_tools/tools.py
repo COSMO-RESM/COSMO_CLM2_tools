@@ -1,5 +1,8 @@
 date_fmt = {'in': '%Y-%m-%d-%H', 'cosmo': '%Y%m%d%H','cesm': '%Y%m%d'}
 
+def COSMO_input_file_name(root, date, ext):
+    return root + date.strftime(date_fmt['cosmo']) + ext
+
 
 def add_time_from_str(date1, dt_str):
     """Increment date from a string
