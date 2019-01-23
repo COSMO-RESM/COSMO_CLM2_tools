@@ -415,8 +415,10 @@ class cc2_case(object):
         # output
         for gribout in self._get_gribouts():
             self._mk_miss_path(gribout['ydir'])
-        self._mk_miss_path(self.nml['INPUT_IO']['ioctl']['ydir_restart_in'])
-        self._mk_miss_path(self.nml['INPUT_IO']['ioctl']['ydir_restart_out'])
+        if 'ydir_restart_in' in self.nml['INPUT_IO']['ioctl']:
+            self._mk_miss_path(self.nml['INPUT_IO']['ioctl']['ydir_restart_in'])
+        if 'ydir_restart_out' in self.nml['INPUT_IO']['ioctl']:
+            self._mk_miss_path(self.nml['INPUT_IO']['ioctl']['ydir_restart_out'])
         # CESM
         # ----
         if not self.cosmo_only:
