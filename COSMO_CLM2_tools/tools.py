@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 date_fmt = {'in': '%Y-%m-%d-%H', 'cosmo': '%Y%m%d%H','cesm': '%Y%m%d'}
 
 def COSMO_input_file_name(root, date, ext):

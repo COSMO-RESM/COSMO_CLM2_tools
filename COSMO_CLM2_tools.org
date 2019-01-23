@@ -1371,6 +1371,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
 ** tools.py
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/tools.py :comments no
+     from datetime import datetime, timedelta
      date_fmt = {'in': '%Y-%m-%d-%H', 'cosmo': '%Y%m%d%H','cesm': '%Y%m%d'}
 
      def COSMO_input_file_name(root, date, ext):
