@@ -37,7 +37,7 @@ class cc2_case(object):
                  start_date=None, end_date=None, run_length=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, dummy_day=True, cosmo_only=False,
-                 gen_oasis=False):
+                 gen_oasis=False, input_type='file'):
 
         # Basic init (no particular work required)
         self.run_length = run_length
@@ -47,13 +47,15 @@ class cc2_case(object):
         self.gen_oasis = gen_oasis
         self.cos_in_file_size = cos_in_file_size
         self.cos_in = os.path.abspath(cos_in)
+        self.install = install
+        self.input_type = input_type
         # Create namelists dictionnary
         self.nml = nmldict(self)
         # Set case name, install_dir and path
         self._name = name
         self.install_dir = install_dir   # also sets self._path
         # Install: transfer namelists, executables and input files
-        if install:
+        if self.install:
             log = 'Setting up case {:s} in {:s}'.format(self._name, self._path)
             print(log + '\n' + '-' * len(log))
             self.install_case(cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in)
@@ -70,7 +72,7 @@ class cc2_case(object):
         self._check_gribout()
         self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
         # Finish install
-        if install:
+        if self.install:
             # Transfer COSMO input files
             # - ML - Change this in future versions: only transfer the first chunck of input files
             self.transfer_cos_in(self.start_date, self.end_date)
@@ -161,11 +163,17 @@ class cc2_case(object):
         check_call(['rsync', '-avrL', os.path.abspath(cos_nml)+'/', self.path])
         check_call(['rsync', '-avrL', os.path.abspath(cos_exe), self.path])
         if not self.cosmo_only:
-            check_call(['rsync', '-avrL', os.path.abspath(cesm_in)+'/', os.path.join(self.path,'CESM_input')+'/'])
+            if self.input_type == 'symlink':
+                check_call(['ln', '-sf', os.path.abspath(cesm_in), os.path.join(self.path,'CESM_input')])
+            elif self.input_type == 'file':
+                check_call(['rsync', '-avrL', os.path.abspath(cesm_in)+'/', os.path.join(self.path,'CESM_input')+'/'])
             check_call(['rsync', '-avrL', os.path.abspath(cesm_nml)+'/', self.path])
             check_call(['rsync', '-avrL', os.path.abspath(cesm_exe), self.path])
             if not self.gen_oasis:
-                check_call(['rsync', '-avrL', os.path.abspath(oas_in)+'/', self.path])
+                if self.input_type == 'symlink':
+                    check_call(['ln', '-sf', os.path.abspath(oas_in), self.path])
+                elif self.input_type == 'file':
+                    check_call(['rsync', '-avrL', os.path.abspath(oas_in)+'/', self.path])
             else:
                 print('generate OASIS file:')
                 for f in os.listdir(oas_in):
@@ -179,7 +187,7 @@ class cc2_case(object):
 
     def _cos_input_delta_ext(self):
         # Set time interval between 2 intput files
-        delta = timedelta(seconds=self.nml['INPUT_IO']['gribin']['hincbound'])
+        delta = timedelta(hours=self.nml['INPUT_IO']['gribin']['hincbound'])
         # Set file extension
         ext = ''
         if 'yform_read' in self.nml['INPUT_IO']['ioctl']:
@@ -190,18 +198,27 @@ class cc2_case(object):
 
     def transfer_cos_in(self, start_date, end_date):
         delta, ext = self._cos_input_delta_ext()
-        if install:
+        if self.install:
             file_name = COSMO_input_file_name('lbfd', self.start_date, ext)
             file_path = os.path.join(self.cos_in, file_name)
             self.cos_in_file_size = os.stat(file_path).st_size
-        # function to check and add file to transfer list
+            if self.input_type == 'symlink':
+                try:
+                    os.makedirs(os.path.join(self.path,'COSMO_input'))
+                except OSError:
+                    pass
+        # function to check and add file to transfer list or directly symlink
         def check_add_file(root, date, file_list):
             file_name = COSMO_input_file_name(root, date, ext)
             if os.path.exists(os.path.join(self.cos_in, file_name)):
-                file_list.write(file_name + '\n')
+                if self.input_type == 'symlink':
+                    check_call(['ln', '-sf', os.path.join(self.cos_in, file_name),
+                                os.path.join(self.path,'COSMO_input')])
+                elif self.input_type == 'file':
+                    file_list.write(file_name + '\n')
             else:
                 raise ValueError("input file {:s} is missing from {:s}".format(file_name, self.cos_in))
-        # Build file list to transfer
+        # Build file list to transfer or symlink
         with open('transfer_list', mode ='w') as t_list:
             check_add_file('laf', start_date, t_list)
             cur_date = start_date
@@ -209,8 +226,9 @@ class cc2_case(object):
                 check_add_file('lbfd', cur_date, t_list)
                 cur_date += delta
         # Tranfer files
-        check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
-                    self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/'])
+        if self.input_type == 'file':
+            check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
+                        self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/'])
         # Remove transfer list
         os.remove('transfer_list')
 
@@ -465,7 +483,7 @@ class cc2_case(object):
         ET.SubElement(main_node, 'end_date').text = self.end_date.strftime(date_fmt['in'])
         ET.SubElement(main_node, 'run_length').text = self.run_length
         ET.SubElement(main_node, 'cos_exe').text = self.cos_exe
-        ET.SubElement(main_node, 'cos_in_file_size').text = self.cos_in_file_size
+        ET.SubElement(main_node, 'cos_in_file_size', type='int').text = str(self.cos_in_file_size)
         if not self.cosmo_only:
             ET.SubElement(main_node, 'cesm_exe').text = self.cesm_exe
         ET.SubElement(main_node, 'cos_in').text = self.cos_in

@@ -108,7 +108,8 @@ def create_case():
     main_group.add_argument('--dummy_day', action=cc2_act('main'), type=str_to_bool,
                             help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
                             "(type: bool, using anything Python can parse as a boolean, default: True)")
-
+    main_group.add_argument('--input_type', action=cc2_act('main'), choices=['file', 'symlink'],
+                            help="default: file")
     slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager.\n'\
                                             '(common to all machines using the slurm scheduler)')
     slurm_group.add_argument('--wall_time', action=cc2_act('daint', 'mistral'),
