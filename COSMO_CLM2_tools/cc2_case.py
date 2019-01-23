@@ -698,9 +698,9 @@ class daint_case(cc2_case):
         # Determine run command
         if self.cosmo_only:
             if self.gpu_mode:
-                run_cmd = 'srun -u --ntasks-per-node=1 -n {:d} {:s}'.format(self._n_nodes, self.COSMO_exe)
+                run_cmd = 'srun -u --ntasks-per-node=1 -n {:d} {:s}'.format(self._n_nodes, self.cos_exe)
             else:
-                run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.COSMO_exe)
+                run_cmd = 'srun -u -n {:d} {:s}'.format(self._n_nodes * self._n_tasks_per_node, self.cos_exe)
         else:
             self._build_proc_config()
             run_cmd = 'srun -u --multi-prog ./proc_config'
