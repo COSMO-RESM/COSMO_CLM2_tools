@@ -69,7 +69,7 @@ class cc2_case(object):
         self.end_date = end_date
         self._compute_run_dates()   # defines _run_start_date, _run_end_date and _runtime (maybe _end_date)
         self._apply_run_dates()
-        self._check_gribout()
+        self._check_INPUT_IO()
         self._organize_tasks(ncosx, ncosy, ncosio, ncesm)
         # Finish install
         if self.install:
@@ -375,7 +375,10 @@ class cc2_case(object):
                 f.write(content)
 
 
-    def _check_gribout(self):
+    def _check_INPUT_IO(self):
+        # Make sure COSMO input and initial files are looked for in the COSMO_input folder
+        self.nml['INPUT_IO']['gribin']['ydirini'] = 'COSMO_input'
+        self.nml['INPUT_IO']['gribin']['ydirbd'] = 'COSMO_input'
         # Only keep gribout blocks that fit within runtime
         # (essentially to avoid crash for short tests)
         runtime_hours = self._runtime.total_seconds() // 3600.0
@@ -415,6 +418,8 @@ class cc2_case(object):
         # output
         for gribout in self._get_gribouts():
             self._mk_miss_path(gribout['ydir'])
+        if 'ydir_restart' in self.nml['INPUT_IO']['ioctl']:
+            self._mk_miss_path(self.nml['INPUT_IO']['ioctl']['ydir_restart'])
         if 'ydir_restart_in' in self.nml['INPUT_IO']['ioctl']:
             self._mk_miss_path(self.nml['INPUT_IO']['ioctl']['ydir_restart_in'])
         if 'ydir_restart_out' in self.nml['INPUT_IO']['ioctl']:
@@ -508,7 +513,8 @@ class cc2_case(object):
                 self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt['cesm']))
             self._compute_run_dates()
             # - ML - Setting ydirini might not be needed, try without at some point
-            self.nml['INPUT_IO']['gribin']['ydirini'] = self.nml['INPUT_IO']['ioctl']['ydir_restart_out']
+            if 'ydir_restart_out' in self.nml['INPUT_IO']['ioctl']:
+                self.nml['INPUT_IO']['gribin']['ydirini'] = self.nml['INPUT_IO']['ioctl']['ydir_restart_out']
             for gribout in self._get_gribouts():
                 gribout['lwrite_const'] = False
             if not self.cosmo_only:
