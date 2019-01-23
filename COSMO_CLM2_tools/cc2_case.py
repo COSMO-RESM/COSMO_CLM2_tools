@@ -718,13 +718,15 @@ class daint_case(cc2_case):
         f_path = os.path.join(self.path, 'cosmo.bash')
         with open(f_path, 'w') as f:
             f.write("#!/bin/bash\n")
-            f.write("export MPICH_RDMA_ENABLED_CUDA={:1d}\n".format(self.gpu_mode))
+            if self.gpu_mode: 
+                f.write("export MPICH_RDMA_ENABLED_CUDA=1\n")
             f.write("./{:s}".format(self.cos_exe))
         os.chmod(f_path, 0o755)
         f_path = os.path.join(self.path, 'cesm.bash')
         with open(f_path, 'w') as f:
             f.write("#!/bin/bash\n")
-            f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
+            if self.gpu_mode:
+                f.write("export MPICH_RDMA_ENABLED_CUDA=0\n")
             f.write("./{:s}".format(self.cesm_exe))
         os.chmod(f_path, 0o755)
 
