@@ -2,9 +2,10 @@
 <setup>
   <!-- main and machine specific options can also be set through the command line.
        Command line takes precedence -->
+  <machine></machine>>
   <main>
     <name>COSMO_CLM2</name>
-    <path></path>
+    <install_dir></install_dir>
     <cosmo_only></cosmo_only>
     <start_date></start_date>
     <end_date></end_date>
@@ -22,7 +23,7 @@
     <ncosio type="int"></ncosio>
     <ncesm type="int"></ncesm>
     <gpu_mode type="py_eval">False</gpu_mode>
-    <dummy_day type="py_eval">True</dummy_day>
+    <dummy_day type="py_eval">False</dummy_day>
   </main>
   <daint>
     <wall_time>24:00:00</wall_time>
@@ -30,7 +31,7 @@
     <partition></partition>
     <modules_opt>switch</modules_opt>
     <pgi_version></pgi_version>
-    <shebang>#!/usr/bin/env bash</shebang>
+    <shebang>#!/bin/bash</shebang>
   </daint>
   <mistral>
     <wall_time>08:00:00</wall_time>

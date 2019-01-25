@@ -127,7 +127,7 @@ def create_case():
     daint_group.add_argument('--pgi_version', action=cc2_act('daint'),
                              help="specify pgi compiler version at run time (default: None)")
     daint_group.add_argument('--shebang', action=cc2_act('daint'),
-                             help="submit script shebang (default: #!/usr/bin/env bash)")
+                             help="submit script shebang (default: #!/bin/bash)")
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',

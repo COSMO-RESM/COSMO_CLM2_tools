@@ -19,8 +19,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
   the cc2_create_case command. This is the result of =cc2_create_case
   --help=:
   #+BEGIN_SRC text
-    usage: cc2_create_case [-h] [--machine MACH] [-s FILE] [--name NAME]
-                           [--path PATH] [--cosmo_only COSMO_ONLY]
+    usage: cc2_create_case [-h] [-s FILE] [--machine MACH] [--name NAME]
+                           [--install_dir INSTALL_DIR] [--cosmo_only COSMO_ONLY]
                            [--start_date DATE_1] [--end_date DATE_2]
                            [--run_length dt] [--cos_in COS_IN] [--cos_nml COS_NML]
                            [--cos_exe COS_EXE] [--cesm_in CESM_IN]
@@ -28,8 +28,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                            [--oas_in OAS_IN] [--oas_nml OAS_NML] [--ncosx NCOSX]
                            [--ncosy NCOSY] [--ncosio NCOSIO] [--ncesm NCESM]
                            [--gpu_mode GPU_MODE] [--dummy_day DUMMY_DAY]
-                           [--wall_time WALL_TIME] [--account ACCOUNT]
-                           [--partition PARTITION]
+                           [--input_type {file,symlink}] [--wall_time WALL_TIME]
+                           [--account ACCOUNT] [--partition PARTITION]
                            [--modules_opt {switch,none,purge}]
                            [--pgi_version PGI_VERSION] [--shebang SHEBANG]
                            [--no_submit] [--gen_oasis]
@@ -43,16 +43,17 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
     optional arguments:
       -h, --help            show this help message and exit
-
-    main:
-      Options common to all machines
-
-      --machine MACH        machine on which the case is running (default: has to be given 
-                            either by the command line or the xml setup file)
       -s FILE, --setup-file FILE
                             xml file conatining setup options
+      --machine MACH        machine on which the case is running (default: has to be given 
+                            either by the command line or the xml setup file)
+
+    main:
+      Case options common to all machines
+
       --name NAME           case name (default: COSMO_CLM2)
-      --path PATH           directory where the case is set up (default: $SCRATCH/NAME on daint)
+      --install_dir INSTALL_DIR
+                            directory where the case is installed (default: $SCRATCH on daint)
       --cosmo_only COSMO_ONLY
                             run only cosmo with build-in soil model TERRA
                             (type: bool, using anything Python can parse as a boolean, default: False)
@@ -85,9 +86,12 @@ Tools for automated creation and run of COSMO_CLM2 simulations
       --dummy_day DUMMY_DAY
                             perform a dummy day run after end of simulation to get last COSMO output.
                             (type: bool, using anything Python can parse as a boolean, default: True)
+      --input_type {file,symlink}
+                            default: file
 
     slurm:
-      Options specific to the slurm workload manager
+      Options specific to the slurm workload manager.
+      (common to all machines using the slurm scheduler)
 
       --wall_time WALL_TIME
                             reserved time on compute nodes
@@ -104,7 +108,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                             Option for loading modules at run time (default: switch)
       --pgi_version PGI_VERSION
                             specify pgi compiler version at run time (default: None)
-      --shebang SHEBANG     submit script shebang (default: #!/bin/bash)
+      --shebang SHEBANG     submit script shebang (default: #!/usr/bin/env bash)
 
     cmd line:
       Options only avialble to the command line (no xml)
@@ -123,9 +127,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
      <setup>
        <!-- main and machine specific options can also be set through the command line.
             Command line takes precedence -->
+       <machine></machine>>
        <main>
          <name>COSMO_CLM2</name>
-         <path></path>
+         <install_dir></install_dir>
          <cosmo_only></cosmo_only>
          <start_date></start_date>
          <end_date></end_date>
@@ -143,7 +148,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
          <ncosio type="int"></ncosio>
          <ncesm type="int"></ncesm>
          <gpu_mode type="py_eval">False</gpu_mode>
-         <dummy_day type="py_eval">True</dummy_day>
+         <dummy_day type="py_eval">False</dummy_day>
        </main>
        <daint>
          <wall_time>24:00:00</wall_time>
@@ -151,7 +156,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
          <partition></partition>
          <modules_opt>switch</modules_opt>
          <pgi_version></pgi_version>
-         <shebang>#!/usr/bin/env bash</shebang>
+         <shebang>#!/bin/bash</shebang>
        </daint>
        <mistral>
          <wall_time>08:00:00</wall_time>
@@ -1207,7 +1212,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           daint_group.add_argument('--pgi_version', action=cc2_act('daint'),
                                    help="specify pgi compiler version at run time (default: None)")
           daint_group.add_argument('--shebang', action=cc2_act('daint'),
-                                   help="submit script shebang (default: #!/usr/bin/env bash)")
+                                   help="submit script shebang (default: #!/bin/bash)")
 
           cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
           cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',

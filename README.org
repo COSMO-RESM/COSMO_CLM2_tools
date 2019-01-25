@@ -1,27 +1,27 @@
-# Created 2018-10-25 Thu 17:19
+# Created 2019-01-25 Fri 14:07
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
-#+EXPORT_FILE_NAME: README
-#+STARTUP: overview
+#+export_file_name: README
+#+startup: overview
 
 Tools for automated creation and run of COSMO_CLM2 simulations
 
 * Install
 - Install COSMO_CLM2_tools
-  #+BEGIN_SRC shell
+  #+begin_src shell
     git clone https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
     cd COSMO_CLM2_tools
     python2 setup.py install --user
-  #+END_SRC
+  #+end_src
 - Make sure =~/.local/bin= is in your path
 
 * Usage
 More comprehensive help will come. Essentially the tool provides
 the cc2_create_case command. This is the result of =cc2_create_case
   --help=:
-#+BEGIN_SRC text
-  usage: cc2_create_case [-h] [--machine MACH] [-s FILE] [--name NAME]
-                         [--path PATH] [--cosmo_only COSMO_ONLY]
+#+begin_src text
+  usage: cc2_create_case [-h] [-s FILE] [--machine MACH] [--name NAME]
+                         [--install_dir INSTALL_DIR] [--cosmo_only COSMO_ONLY]
                          [--start_date DATE_1] [--end_date DATE_2]
                          [--run_length dt] [--cos_in COS_IN] [--cos_nml COS_NML]
                          [--cos_exe COS_EXE] [--cesm_in CESM_IN]
@@ -29,33 +29,35 @@ the cc2_create_case command. This is the result of =cc2_create_case
                          [--oas_in OAS_IN] [--oas_nml OAS_NML] [--ncosx NCOSX]
                          [--ncosy NCOSY] [--ncosio NCOSIO] [--ncesm NCESM]
                          [--gpu_mode GPU_MODE] [--dummy_day DUMMY_DAY]
-                         [--wall_time WALL_TIME] [--account ACCOUNT]
-                         [--partition PARTITION]
+                         [--input_type {file,symlink}] [--wall_time WALL_TIME]
+                         [--account ACCOUNT] [--partition PARTITION]
                          [--modules_opt {switch,none,purge}]
-                         [--pgi_version {16.9.0,17.5.0,17.10.0, 18.5.0}]
-                         [--shebang SHEBANG] [--no_submit] [--gen_oasis]
-  
+                         [--pgi_version PGI_VERSION] [--shebang SHEBANG]
+                         [--no_submit] [--gen_oasis]
+
   Set up and run a COSMO_CLM2 case
   --------------------------------
   Options can be set up either by xml file or the following command line arguments.
   xml file options must be stored in a subelement of the root element tagged with 'main'.
   and/or the specific machine (see https://github.com/COSMO-RESM/COSMO_CLM2_tools/blob/master/COSMO_CLM2_tools/default_setup.xml)
   Command line arguments have precedence over xml file ones.
-  
+
   optional arguments:
     -h, --help            show this help message and exit
-  
-  main:
-    Options common to all machines
-  
-    --machine MACH        machine on which the case is running (default: has to be given
-                          either by the command line or the xml setup file)
     -s FILE, --setup-file FILE
                           xml file conatining setup options
-    --name NAME           case name (default: 'COSMO_CLM2')
-    --path PATH           directory where the case is set up (default: $SCRATCH/NAME on daint)
+    --machine MACH        machine on which the case is running (default: has to be given 
+                          either by the command line or the xml setup file)
+
+  main:
+    Case options common to all machines
+
+    --name NAME           case name (default: COSMO_CLM2)
+    --install_dir INSTALL_DIR
+                          directory where the case is installed (default: $SCRATCH on daint)
     --cosmo_only COSMO_ONLY
-                          run only cosmo with build-in soil model TERRA (default: False)
+                          run only cosmo with build-in soil model TERRA
+                          (type: bool, using anything Python can parse as a boolean, default: False)
                           Be carefull to provide a COSMO executable compiled accordingly
     --start_date DATE_1   simulation start date formatted as YYYY-MM-DD-HH
     --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
@@ -64,14 +66,14 @@ the cc2_create_case command. This is the result of =cc2_create_case
                           dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'
                           N1, N2 and N3 being arbitrary integers (N2>12 possible) and
                           'y', 'm' and 'd' stand for year, month and day
-    --cos_in COS_IN       COSMO input files directory (default: './COSMO_input')
-    --cos_nml COS_NML     COSMO namelists directory (default: './COSMO_nml')
-    --cos_exe COS_EXE     path to COSMO executable (default: './cosmo')
-    --cesm_in CESM_IN     CESM input files directory (default: './CESM_input')
-    --cesm_nml CESM_NML   CESM namelists directory (default: './CESM_nml')
-    --cesm_exe CESM_EXE   CESM executable (default: './cesm.exe')
-    --oas_in OAS_IN       OASIS input files directory (default: './OASIS_input')
-    --oas_nml OAS_NML     OASIS namelists directory (default: './OASIS_nml')
+    --cos_in COS_IN       COSMO input files directory (default: ./COSMO_input)
+    --cos_nml COS_NML     COSMO namelists directory (default: ./COSMO_nml)
+    --cos_exe COS_EXE     path to COSMO executable (default: ./cosmo)
+    --cesm_in CESM_IN     CESM input files directory (default: ./CESM_input)
+    --cesm_nml CESM_NML   CESM namelists directory (default: ./CESM_nml)
+    --cesm_exe CESM_EXE   CESM executable (default: ./cesm.exe)
+    --oas_in OAS_IN       OASIS input files directory (default: ./OASIS_input)
+    --oas_nml OAS_NML     OASIS namelists directory (default: ./OASIS_nml)
     --ncosx NCOSX         number of subdomains along the 'x-axis'
                           for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
     --ncosy NCOSY         number of subdomains along the 'y-axis'
@@ -85,10 +87,13 @@ the cc2_create_case command. This is the result of =cc2_create_case
     --dummy_day DUMMY_DAY
                           perform a dummy day run after end of simulation to get last COSMO output.
                           (type: bool, using anything Python can parse as a boolean, default: True)
-  
+    --input_type {file,symlink}
+                          default: file
+
   slurm:
-    Options specific to the slurm workload manager
-  
+    Options specific to the slurm workload manager.
+    (common to all machines using the slurm scheduler)
+
     --wall_time WALL_TIME
                           reserved time on compute nodes
                           (default: '24:00:00' on daint, '08:00:00' on mistral)
@@ -96,22 +101,22 @@ the cc2_create_case command. This is the result of =cc2_create_case
                           (default: infered from $PROJECT on daint, None on mistral)
     --partition PARTITION
                           select a queue (default: None)
-  
+
   daint:
     Options specific to the Piz Daint machine
-  
+
     --modules_opt {switch,none,purge}
-                          Option for loading modules at run time (default: 'switch')
-    --pgi_version {16.9.0,17.5.0,17.10.0, 18.5.0}
+                          Option for loading modules at run time (default: switch)
+    --pgi_version PGI_VERSION
                           specify pgi compiler version at run time (default: None)
-    --shebang SHEBANG     submit script shebang (default: '#!/usr/bin/env bash')
-  
+    --shebang SHEBANG     submit script shebang (default: #!/usr/bin/env bash)
+
   cmd line:
     Options only avialble to the command line (no xml)
-  
+
     --no_submit           do not submit job after setup
                           only command line argument, cannot be set in xml file
     --gen_oasis           generate OASIS auxiliary files
                           note that OASIS will crash after producing the files
                           only command line argument, cannot be set in xml file
-#+END_SRC
+#+end_src
