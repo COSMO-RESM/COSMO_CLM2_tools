@@ -1498,14 +1498,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations
          script.write('\n')
          if opts.compiler == 'pgi':
              script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
-             if compiler_version is not None:
-                 script.write('module switch pgi pgi/{:s}\n'.format(compiler_version))
+             if opts.compiler_version is not None:
+                 script.write('module switch pgi pgi/{:s}\n'.format(opts.compiler_version))
          elif opts.compiler == 'intel':
              script.write('module switch PrgEnv-cray PrgEnv-intel\n')
-             if compiler_version is not None:
-                 script.write('module switch intel intel/{:s}\n'.format(compiler_version))
-         elif opts.compiler == 'cray' and compiler_version is not None:
-             script.write('module switch cce cce/{:s}\n'.format(compiler_version))
+             if opts.compiler_version is not None:
+                 script.write('module switch intel intel/{:s}\n'.format(opts.compiler_version))
+         elif opts.compiler == 'cray' and opts.compiler_version is not None:
+             script.write('module switch cce cce/{:s}\n'.format(opts.compiler_version))
          script.write('\n')
          script.write('module load cray-netcdf\n')
          script.write('module load daint-gpu\n')
