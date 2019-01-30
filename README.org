@@ -1,4 +1,4 @@
-# Created 2019-01-30 Wed 16:58
+# Created 2019-01-30 Wed 17:05
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -13,7 +13,12 @@ cloning and installing manually
 - Install COSMO_CLM2_tools
   #+begin_src shell
     module load cray-python/3.6.5.1
-    pip3 install git+https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
+    pip3 install --user git+https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
+  #+end_src
+  use ~--upgrade~ for later updates
+  #+begin_src shell
+    module load cray-python/3.6.5.1
+    pip3 install --user --upgrade git+https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
   #+end_src
 - Make sure =~/.local/bin= is in your path
 
