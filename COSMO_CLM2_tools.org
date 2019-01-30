@@ -6,11 +6,13 @@
 Tools for automated creation and run of COSMO_CLM2 simulations
 
 * Install
+  You can now install either for python 2 or 3 (I recommand python3 as
+  I won't be ensuring compatibility with python2 anymore) and without
+  cloning and installing manually
   - Install COSMO_CLM2_tools
     #+BEGIN_SRC shell
-      git clone https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
-      cd COSMO_CLM2_tools
-      python2 setup.py install --user
+      module load cray-python/3.6.5.1
+      pip3 install git+https://github.com/COSMO-RESM/COSMO_CLM2_tools.git
     #+END_SRC
   - Make sure =~/.local/bin= is in your path
 
