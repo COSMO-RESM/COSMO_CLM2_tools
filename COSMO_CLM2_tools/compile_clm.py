@@ -2,6 +2,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from glob import glob
 from subprocess import check_call
 import os
+from shutil import rmtree
 
 
 def compile_clm():
@@ -35,6 +36,8 @@ def compile_clm():
     CESM_TRUNK = opts.cesm_trunk
     EXP = 'clm{:s}_bld'.format(opts.clm_version)
     CASEDIR = os.path.join(os.environ['SCRATCH'], EXP)
+    if os.path.exist(CASEDIR):
+        rmtree(CASEDIR)
     RES = '1.9x2.5_gx1v6'
     COMP = 'ITEST'
     MACH = 'daint'
@@ -42,7 +45,6 @@ def compile_clm():
         COMP += 'CLM45'
     create_case_fmt = '{:s}/scripts/create_newcase -res {:s} -compset {:s} -mach {:s} -compiler pgi_oas -case {:s}'
     create_case_cmd = create_case_fmt.format(CESM_TRUNK, RES, COMP, MACH, CASEDIR)
-
 
     # Build compiling script
     # ----------------------
