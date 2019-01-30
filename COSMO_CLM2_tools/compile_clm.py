@@ -25,7 +25,7 @@ def compile_clm():
     parser.add_argument('-o', '--output', help="output executable file path (default: ./cesm.exe)",
                         default=os.path.join(os.getcwd(), './cesm.exe'))
     parser.add_argument('--no_exe', help="do not execute build_cesm.bash, leave it to any suited modification before actual compilation.",
-                        default=os.path.join(os.getcwd(), 'cesm.exe'))
+                        action='store_false', dest='execute')
     opts = parser.parse_args()
 
 
@@ -114,5 +114,5 @@ def compile_clm():
     # Execute compiling script
     # ------------------------
 
-    if not opts.no_exe:
+    if opts.execute:
         check_call(['./build_cesm.bash'])

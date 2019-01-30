@@ -1457,7 +1457,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
          # Define and parse command line arguments
          # ---------------------------------------
-    
+
          dsc = "Compile CLM on Piz Daint. A case will be created in a subfolder of your ${SCRATCH}.\n"\
                " WARNING: tool has to be run from the default Prg-Env-cray environment"
          parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
@@ -1474,13 +1474,13 @@ Tools for automated creation and run of COSMO_CLM2 simulations
          parser.add_argument('-o', '--output', help="output executable file path (default: ./cesm.exe)",
                              default=os.path.join(os.getcwd(), './cesm.exe'))
          parser.add_argument('--no_exe', help="do not execute build_cesm.bash, leave it to any suited modification before actual compilation.",
-                             default=os.path.join(os.getcwd(), 'cesm.exe'))
+                             action='store_false', dest='execute')
          opts = parser.parse_args()
-    
-    
+
+
          # Init some variables
          # -------------------
-    
+
          CESM_TRUNK = opts.cesm_trunk
          EXP = 'clm{:s}_bld'.format(opts.clm_version)
          CASEDIR = os.path.join(os.environ['SCRATCH'], EXP)
@@ -1491,11 +1491,11 @@ Tools for automated creation and run of COSMO_CLM2 simulations
              COMP += 'CLM45'
          create_case_fmt = '{:s}/scripts/create_newcase -res {:s} -compset {:s} -mach {:s} -compiler pgi_oas -case {:s}'
          create_case_cmd = create_case_fmt.format(CESM_TRUNK, RES, COMP, MACH, CASEDIR)
-    
-    
+
+
          # Build compiling script
          # ----------------------
-    
+
          with open('build_cesm.bash', mode='w') as script:
              script.write('#!/bin/bash\n')
              script.write('\n')
@@ -1556,14 +1556,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations
              script.write('\n')
              script.write('{:s}.build\n'.format(EXP))
              script.write('rsync -avrL bld/cesm.exe {:s}\n'.format(opts.output))
-    
+
          os.chmod('build_cesm.bash', 0o755)
-    
-    
+
+
          # Execute compiling script
          # ------------------------
-    
-         if not opts.no_exe:
+
+         if opts.execute:
              check_call(['./build_cesm.bash'])
 
    #+END_SRC
