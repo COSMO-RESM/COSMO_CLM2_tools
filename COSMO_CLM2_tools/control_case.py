@@ -22,5 +22,6 @@ def control_case():
     cc2case.run()
 
     # Submit next run
-    if cc2case.set_next_run():
-        cc2case.submit()
+    resubmit = cc2case.set_next_run()
+    if resubmit:
+        cc2case.submit_run()

@@ -45,7 +45,9 @@ def get_xml_node_args(node, exclude=()):
 
     for opt in node.iter():
         if opt is not node and opt.tag not in exclude:
-            if opt.get('type') is None:
+            if opt.text is None:
+                xml_args[opt.tag] = None
+            elif opt.get('type') is None:
                 xml_args[opt.tag] = opt.text
             elif opt.get('type') == 'py_eval':
                 xml_args[opt.tag] = eval(opt.text)

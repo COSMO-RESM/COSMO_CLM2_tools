@@ -1,9 +1,5 @@
 import os
 from setuptools import setup
-# try:
-#     from setuptools import setup
-# except ImportError:
-#     from distutils.core import setup
 
 def get_version():
     with open('COSMO_CLM2_tools/__init__.py') as f:

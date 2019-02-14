@@ -24,7 +24,7 @@ def compile_clm():
                         help="path to additionnal/modified sources (e.g. oasis interface)\n"\
                         "has to be a folder containing src.xxx subfolders, can be specified several times")
     parser.add_argument('-o', '--output', help="output executable file path (default: ./cesm.exe)",
-                        default=os.path.join(os.getcwd(), './cesm.exe'))
+                        default='./cesm.exe')
     parser.add_argument('--no_exe', help="do not execute build_cesm.bash, leave it to any suited modification before actual compilation.",
                         action='store_false', dest='execute')
     opts = parser.parse_args()
@@ -36,13 +36,17 @@ def compile_clm():
     CESM_TRUNK = opts.cesm_trunk
     EXP = 'clm{:s}_bld'.format(opts.clm_version)
     CASEDIR = os.path.join(os.environ['SCRATCH'], EXP)
-    if os.path.exist(CASEDIR):
+    if os.path.exists(CASEDIR):
         rmtree(CASEDIR)
     RES = '1.9x2.5_gx1v6'
     COMP = 'ITEST'
     MACH = 'daint'
     if opts.clm_version == '4.5':
         COMP += 'CLM45'
+
+    out_exe = os.path.abspath(opts.output)
+    sourcemods = [os.path.abspath(src_dir) for src_dir in opts.src_mod]
+
     create_case_fmt = '{:s}/scripts/create_newcase -res {:s} -compset {:s} -mach {:s} -compiler pgi_oas -case {:s}'
     create_case_cmd = create_case_fmt.format(CESM_TRUNK, RES, COMP, MACH, CASEDIR)
 
@@ -99,16 +103,18 @@ def compile_clm():
         script.write('# Add source additions/modifications\n')
         script.write('# ----------------------------------------------\n')
         script.write('\n')
-        for src_dir in opts.src_mod:
-            for comp in glob('src.*'):
-                script.write('rsync -avrH {:s}\n SourceMods'.format(comp))
+        for src_dir in sourcemods:
+            print(src_dir)
+            for comp in glob('{:s}/src.*'.format(src_dir)):
+                print(comp)
+                script.write('rsync -avrL {:s} SourceMods\n'.format(comp))
         script.write('\n')
         script.write('# ----------------------------------------------\n')
         script.write('# Build\n')
         script.write('# ----------------------------------------------\n')
         script.write('\n')
         script.write('{:s}.build\n'.format(EXP))
-        script.write('rsync -avrL bld/cesm.exe {:s}\n'.format(opts.output))
+        script.write('rsync -avr bld/cesm.exe {:s}\n'.format(out_exe))
 
     os.chmod('build_cesm.bash', 0o755)
 

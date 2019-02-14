@@ -24,9 +24,11 @@
     <ncesm type="int"></ncesm>
     <gpu_mode type="py_eval">False</gpu_mode>
     <dummy_day type="py_eval">False</dummy_day>
+    <run_time>24:00:00</run_time>
+    <transfer_all type="py_eval">False</transfer_all>>
+    <transfer_time>02:00:00</transfer_time>
   </main>
   <daint>
-    <wall_time>24:00:00</wall_time>
     <account></account>
     <partition></partition>
     <modules_opt>switch</modules_opt>
@@ -34,7 +36,6 @@
     <shebang>#!/bin/bash</shebang>
   </daint>
   <mistral>
-    <wall_time>08:00:00</wall_time>
     <account></account>
     <partition></partition>
   </mistral>
