@@ -40,7 +40,7 @@ class cc2_case(object):
                  start_date=None, end_date=None, run_length=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, dummy_day=True, cosmo_only=False,
-                 gen_oasis=False, input_type='file', transfer_all=False):
+                 gen_oasis=False, input_type='file', transfer_all=True):
 
         # Basic init (no particular work required)
         self.run_length = run_length
