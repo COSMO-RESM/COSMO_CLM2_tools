@@ -1339,7 +1339,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                                   help="default: file")
           main_group.add_argument('--transfer_all', action=cc2_act('main'), type=str_to_bool,
                                   help="Transfer all model input files at once before starting the simulation\n"\
-                                  "(type: bool, using anything Python can parse as a boolean, default: False)")
+                                  "(type: bool, using anything Python can parse as a boolean, default: True)")
           main_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
                                   help="reserved time on compute nodes\n"\
                                   "(default: '24:00:00' on daint, '08:00:00' on mistral)")
