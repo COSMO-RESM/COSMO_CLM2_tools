@@ -18,10 +18,8 @@ def control_case():
     case_args.update(get_xml_node_args(config.find(machine)))
     cc2case = cc2_case_factory(machine, **case_args)
 
+    # Submit next transfer and run
+    cc2case.submit_next()
+
     # Run
     cc2case.run()
-
-    # Submit next run
-    resubmit = cc2case.set_next_run()
-    if resubmit:
-        cc2case.submit_run()

@@ -1,6 +1,6 @@
 from __future__ import print_function
 from .tools import date_fmt, add_time_from_str, COSMO_input_file_name
-from subprocess import check_call
+from subprocess import check_call, check_output
 from argparse import ArgumentParser, RawTextHelpFormatter
 import f90nml
 from datetime import datetime, timedelta
@@ -83,7 +83,7 @@ class cc2_case(object):
             self._check_COSMO_input(self._run_start_date, self._run_end_date)
         # Write modified namelists to file
         self.write_open_nml()
-        # Transfer input / submit transfer job
+        # Transfer input / build transfer list
         self.manage_input()
         # Write xml config file
         if self.install:
@@ -256,9 +256,17 @@ class cc2_case(object):
         elif not self.transfer_all and self._run_end_date < self.end_date:
             next_end_date = self.get_next_run_end_date()
             self.build_transfer_list(self._run_end_date, next_end_date)
-            self._update_transfer_job(self._run_end_date, next_end_date)
+
+
+    def submit_next(self):
+
+        if self._run_end_date < self.end_date:
+            next_end_date = self.get_next_run_end_date()
             self._update_run_job(self._run_end_date, next_end_date)
-            self.submit_transfer()
+            if not self.transfer_all:
+                self._update_transfer_job(self._run_end_date, next_end_date)
+                self.submit_transfer()
+            self.submit_run()
 
 
     def _check_COSMO_input(self, start_date, end_date):
@@ -486,7 +494,7 @@ class cc2_case(object):
         # ----
         if not self.cosmo_only:
             # timing
-            # - ML - remove if exists before creating
+            # remove if exists before creating
             shutil.rmtree(os.path.join(self.path, self.nml['drv_in']['seq_infodata_inparm']['timing_dir']),
                           ignore_errors=True)
             shutil.rmtree(os.path.join(self.path, self.nml['drv_in']['seq_infodata_inparm']['tchkpt_dir']),
@@ -554,18 +562,12 @@ class cc2_case(object):
 
     def set_next_run(self):
 
-        # Are we done with the simulation?
-        resubmit = self._run_end_date < self._end_date
-
-        if resubmit:
+        if self._run_end_date < self._end_date:
             # Set new run start date in namelists
             hstart = (self._run_end_date - self._start_date).total_seconds() // 3600.0
             self.nml['INPUT_ORG']['runctl']['hstart'] = hstart
             if not self.cosmo_only:
                 self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt['cesm']))
-            if self.transfer_all:
-                # Upddate run_job with new run dates
-                self._update_run_job(self._run_end_date, self.get_next_run_end_date())
 
             # Set namelists parameters for "restart mode"
             # - ML - Setting ydirini might be useless, try without at some point
@@ -579,21 +581,18 @@ class cc2_case(object):
             # Write namelists to file
             self.write_open_nml()
 
-        # - ML - if not transfer_all, run gets re-submitted by the transfer job
-        return self.transfer_all and resubmit
-
 
     def submit_run(self):
         cwd = os.getcwd()
         os.chdir(self.path)
-        self._submit_fun(self._run_job)
+        self._submit_run_cmd()
         os.chdir(cwd)
 
 
     def submit_transfer(self):
         cwd = os.getcwd()
         os.chdir(self.path)
-        self._submit_fun(self._transfer_job)
+        self._submit_transfer_cmd()
         os.chdir(cwd)
 
 
@@ -652,10 +651,16 @@ class cc2_case(object):
         raise NotImplementedError(self.NotImplementedMessage.format('_run_fun(self)', self.__class__.__name__))
 
 
-    def _submit_fun(self, job_file):
-        """Place holder for _submit_fun method to be implemented by machine specific classes."""
+    def _submit_run_cmd(self):
+        """Place holder for _submit_run_cmd method to be implemented by machine specific classes."""
 
-        raise NotImplementedError(self.NotImplementedMessage.format('_submit_fun(self)', self.__class__.__name__))
+        raise NotImplementedError(self.NotImplementedMessage.format('_submit_run_cmd(self)', self.__class__.__name__))
+
+
+    def _submit_transfer_cmd(self):
+        """Place holder for _submit_transfer_cmd method to be implemented by machine specific classes."""
+
+        raise NotImplementedError(self.NotImplementedMessage.format('_submit_transfer_cmd(self)', self.__class__.__name__))
 
 def available(cls):
     if cls._target_machine is None:
@@ -684,6 +689,7 @@ class daint_case(cc2_case):
         self.pgi_version = pgi_version
         self.shebang = shebang
         self.partition = partition
+        self._transfer_id = None
         cc2_case.__init__(self, **base_case_args)
         if self.install and not self.cosmo_only:
             self._build_proc_config()
@@ -703,9 +709,10 @@ class daint_case(cc2_case):
 
     def _build_run_job(self):
 
-        logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                              self._run_start_date.strftime(date_fmt['cesm']),
-                                              self._run_end_date.strftime(date_fmt['cesm']))
+        d1_str = self._run_start_date.strftime(date_fmt['cesm'])
+        d2_str = self._run_end_date.strftime(date_fmt['cesm'])
+        logfile = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
+
         with open(os.path.join(self.path, self._run_job), mode='w') as script:
             # shebang
             script.write('{:s}\n\n'.format(self.shebang))
@@ -759,8 +766,11 @@ class daint_case(cc2_case):
                 script.write('module load daint-gpu\n')
                 script.write('module load cray-netcdf\n')
                 if self.gpu_mode:
-                    script.write('module load craype-accel-nvidia60\n')    
+                    script.write('module load craype-accel-nvidia60\n')
                 script.write('\n')
+
+            # - ML - test: Keep track of the environment
+            script.write('env | sort > env_{:s}-{:s}\n\n'.format(d1_str, d2_str))
 
             # launch case
             script.write('cc2_control_case ./{:s}'.format(self._xml_config))
@@ -772,7 +782,9 @@ class daint_case(cc2_case):
         d2_str = d2.strftime(date_fmt['cesm'])
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
         rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
-                 '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
+                 '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile),
+                 # - ML - test: Keep track of the environment
+                 'env | sort > env_.*$': 'env | sort > env_{:s}-{:s}\n'.format(d1_str, d2_str)}
         with open(os.path.join(self.path, self._run_job), mode='r+') as f:
             content = f.read()
             for pattern, repl in rules.items():
@@ -788,7 +800,7 @@ class daint_case(cc2_case):
 
         with open(os.path.join(self.path, self._transfer_job), mode='w') as script:
             # shebang
-            script.write('#!/bin/bash -l\n\n')
+            script.write('{:s}\n\n'.format(self.shebang))
 
             # slurm options
             script.write('#SBATCH --constraint=gpu\n')
@@ -804,21 +816,14 @@ class daint_case(cc2_case):
             script.write('rsync -avrL --files-from transfer_list {:s} {:s}'.format(
                 self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n\n'))
 
-            # launch next run job
-            sbatch_cmd = 'sbatch --ntasks {:d} --dependency=afterok:$SLURM_JOB_ID:SLURM_RUN_ID {:s}'
-            script.write(sbatch_cmd.format(self._n_nodes * self._n_tasks_per_node, self._run_job))
-
 
     def _update_transfer_job(self, d1, d2):
 
         d1_str = d1.strftime(date_fmt['cesm'])
         d2_str = d2.strftime(date_fmt['cesm'])
         logfile = '{:s}_{:s}-{:s}.out'.format('transfer', d1_str, d2_str)
-        sbatch_cmd = 'sbatch --ntasks {:d} --dependency=afterok:$SLURM_JOB_ID:{:s} {:s}'.format(
-            self._n_nodes * self._n_tasks_per_node, os.environ['SLURM_JOB_ID'], self._run_job)
         rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
-                 '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile),
-                 '^sbatch.*$': sbatch_cmd}
+                 '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
         with open(os.path.join(self.path, self._transfer_job), mode='r+') as f:
             content = f.read()
             for pattern, repl in rules.items():
@@ -828,8 +833,25 @@ class daint_case(cc2_case):
             f.truncate()
 
 
-    def _submit_fun(self, job_file):
-        check_call(['sbatch', job_file])
+    def _submit_run_cmd(self):
+
+        cmd = ['sbatch']
+
+        if not self.install:
+            dep_opt = '--dependency=afterok:' + os.environ['SLURM_JOB_ID']
+            if self._transfer_id is not None:
+                dep_opt += ':' + self._transfer_id
+            cmd += [dep_opt]
+
+        cmd += [self._run_job]
+
+        check_call(cmd)
+
+
+    def _submit_transfer_cmd(self):
+
+        # Set transfer_id and submit transfer job
+        self._transfer_id = str(check_output(['sbatch', '--parsable', self._transfer_job]).rstrip(b'\n'), 'utf-8')
 
 
     def _run_fun(self):
@@ -886,8 +908,10 @@ class mistral_case(cc2_case):
     _target_machine='mistral'
     _n_tasks_per_node = 24
 
+
     def __init__(self, run_time='08:00:00', account=None, partition=None,
                  transfer_time='02:00:00', **base_case_args):
+
         self.run_time = run_time
         self.transfer_time = transfer_time
         self.account = account
@@ -955,8 +979,9 @@ class mistral_case(cc2_case):
             f.truncate()
 
 
-    def _submit_fun(self, job_file):
-        check_call(['sbatch', job_file])
+    def _submit_run_cmd(self):
+
+        check_call(['sbatch', self._run_job])
 
 
     def _run_fun(self):
