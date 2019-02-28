@@ -20,12 +20,20 @@ def factory(machine, **case_args):
     else:
         return available_cases[machine](**case_args)
 
+def available(cls):
+    if cls._target_machine is None:
+        raise NotImplementedError("_target_machine class variable not set for Class {:s}".format(cls.__name__))
+    else:
+        available_cases[cls._target_machine] = cls
+        return cls
+
 class cc2_case(object):
     """Base class defining a COSMO-CLM2 case"""
 
     _target_machine = None
     _n_tasks_per_node = None
     _default_install_dir = None
+    _control_job = 'cc2_control_job'
     _run_job = 'cc2_run_job'
     _transfer_job = 'cc2_transfer_job'
     _xml_config = 'cc2_config.xml'
@@ -43,6 +51,7 @@ class cc2_case(object):
                  gen_oasis=False, input_type='file', transfer_all=True):
 
         # Basic init (no particular work required)
+        self.name = name
         self.run_length = run_length
         self.gpu_mode = gpu_mode
         self.dummy_day = dummy_day
@@ -53,14 +62,14 @@ class cc2_case(object):
         self.install = install
         self.input_type = input_type
         self.transfer_all = transfer_all
+        self.transfer_by_chunck = not self.transfer_all and self.input_type == 'file'
         # Create namelists dictionnary
         self.nml = nmldict(self)
-        # Set case name, install_dir and path
-        self._name = name
-        self.install_dir = install_dir   # also sets self._path
+        # Set install_dir and path
+        self.install_dir = install_dir
         # Install: transfer namelists, executables and input files
         if self.install:
-            log = 'Setting up case {:s} in {:s}'.format(self._name, self._path)
+            log = 'Setting up case {:s} in {:s}'.format(self.name, self._path)
             print(log + '\n' + '-' * len(log))
             self.install_case(cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in)
         self.cos_exe = cos_exe
@@ -69,6 +78,7 @@ class cc2_case(object):
         # Settings involving namelist changes
         self.start_date = start_date
         self.end_date = end_date
+        # - ML - Some of the following is useless for transfer action
         self._compute_run_dates()   # defines _run_start_date, _run_end_date and _runtime (_end_date if needed)
         self._apply_run_dates()   # put dates and runtime in namelists objects (writing to file at the end)
         self._check_INPUT_IO()
@@ -76,18 +86,13 @@ class cc2_case(object):
         # Finish install
         if self.install:
             self._build_run_job()
-            # Create missing directories
+            if self.transfer_by_chunck and self._run_end_date < self.end_date:
+                self._build_transfer_job()
             self._create_missing_dirs()
-        # Check presence and size of input files for current chunk
-        if not self.install:
-            self._check_COSMO_input(self._run_start_date, self._run_end_date)
+            self.install_input()
+            self.to_xml()
         # Write modified namelists to file
         self.write_open_nml()
-        # Transfer input / build transfer list
-        self.manage_input()
-        # Write xml config file
-        if self.install:
-            self.to_xml()
 
     @property
     def cos_exe(self):
@@ -125,10 +130,6 @@ class cc2_case(object):
         return self._path
 
     @property
-    def name(self):
-        return self._name
-
-    @property
     def start_date(self):
         return self._start_date
     @start_date.setter
@@ -154,6 +155,26 @@ class cc2_case(object):
             self._end_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_end'], date_fmt['cosmo'])
         else:
             self._end_date = None
+
+    @property
+    def run_status(self):
+        status_node = ET.parse(os.path.join(self.path, self._xml_config)).getroot().find('status')
+        return status_node.find('run_status').text
+    @run_status.setter
+    def run_status(self, status):
+        tree = ET.parse(os.path.join(self.path, self._xml_config))
+        tree.find('status').find('run_status').text = status
+        tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
+
+    @property
+    def transfer_status(self):
+        status_node = ET.parse(os.path.join(self.path, self._xml_config)).getroot().find('status')
+        return status_node.find('transfer_status').text
+    @transfer_status.setter
+    def transfer_status(self, status):
+        tree = ET.parse(os.path.join(self.path, self._xml_config))
+        tree.find('status').find('transfer_status').text = status
+        tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
 
 
     def install_case(self, cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in):
@@ -207,16 +228,6 @@ class cc2_case(object):
 
         delta, ext = self._cos_input_delta_ext()
 
-        if self.install:
-            file_name = COSMO_input_file_name('lbfd', self.start_date, ext)
-            file_path = os.path.join(self.cos_in, file_name)
-            self.cos_in_file_size = os.stat(file_path).st_size
-            if self.input_type == 'symlink':
-                try:
-                    os.makedirs(os.path.join(self.path,'COSMO_input'))
-                except OSError:
-                    pass
-
         # function to check and add file to transfer list or directly symlink
         def _check_add_file(root, date, file_list):
             file_name = COSMO_input_file_name(root, date, ext)
@@ -239,34 +250,49 @@ class cc2_case(object):
                 cur_date += delta
 
 
-    def manage_input(self):
+    def transfer_input(self):
 
-        # Transfer first chunck input files
-        if self.install:
-            if not self.transfer_all and self._run_end_date < self.end_date:
-                self.build_transfer_list(self.start_date, self._run_end_date, initial=True)
-                self._build_transfer_job()   # for later submitted transfers
-            else:
-                self.build_transfer_list(self.start_date, self.end_date, initial=True)
+        if self.input_type == 'file':
             check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
                         self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/'])
-            os.remove('transfer_list')
-
-        # Build transfer list for next chunk and submit transfer job
-        elif not self.transfer_all and self._run_end_date < self.end_date:
-            next_end_date = self.get_next_run_end_date()
-            self.build_transfer_list(self._run_end_date, next_end_date)
 
 
-    def submit_next(self):
+    def install_input(self):
 
-        if self._run_end_date < self.end_date:
-            next_end_date = self.get_next_run_end_date()
-            self._update_run_job(self._run_end_date, next_end_date)
-            if not self.transfer_all:
-                self._update_transfer_job(self._run_end_date, next_end_date)
-                self.submit_transfer()
-            self.submit_run()
+        # Get cosmo lbf input file size
+        _, ext = self._cos_input_delta_ext()
+        file_name = COSMO_input_file_name('lbfd', self.start_date, ext)
+        file_path = os.path.join(self.cos_in, file_name)
+        self.cos_in_file_size = os.stat(file_path).st_size
+
+        # Create COSMO_input directory if missing (essentially for symlinks)
+        self._mk_miss_path('COSMO_input')
+
+        # Transfer first chunck input files or all
+        if self.transfer_by_chunck and self._run_end_date < self.end_date:
+            self.build_transfer_list(self.start_date, self._run_end_date, initial=True)
+        else:
+            self.build_transfer_list(self.start_date, self.end_date, initial=True)
+        self.transfer_input()
+        os.remove('transfer_list')
+
+        # Set transfer status
+        self.transfer_status = 'complete'
+
+
+    def submit_next_run(self):
+
+        next_end_date = self.get_next_run_end_date()
+        self._update_run_job(self._run_end_date, next_end_date)
+        self.submit_run()
+
+
+    def submit_next_transfer(self):
+
+        next_end_date = self.get_next_run_end_date()
+        self.build_transfer_list(self._run_end_date, next_end_date)
+        self._update_transfer_job(self._run_end_date, next_end_date)
+        self.submit_transfer()
 
 
     def _check_COSMO_input(self, start_date, end_date):
@@ -551,6 +577,10 @@ class cc2_case(object):
         ET.SubElement(main_node, 'dummy_day', type='py_eval').text = str(self.dummy_day)
         ET.SubElement(main_node, 'transfer_all', type='py_eval').text = str(self.transfer_all)
 
+        status_node = ET.SubElement(config_node, 'status')
+        ET.SubElement(status_node, 'run_status').text = 'none'
+        ET.SubElement(status_node, 'transfer_status').text = 'none'
+
         # - ML - Could be usefull in case machine specific arguments need to be stored one day.
         #        This isn't the case as of now
         ET.SubElement(config_node, self._target_machine)
@@ -601,20 +631,16 @@ class cc2_case(object):
         # Monitor time
         start_time = time.time()
 
-        # Go to case directory (useless more modular, just in case)
-        cwd = os.getcwd()
-        os.chdir(self.path)
-
         # Clean workdir
         file_list = glob('YU*') + glob('debug*') + glob('core*') + glob('nout.*') + glob('*.timers_*')
         for f in file_list:
             os.remove(f)
 
+        # Check presence and size of input files for current chunk
+        self._check_COSMO_input(self._run_start_date, self._run_end_date)
+
         # Run
         self._run_fun()
-
-        # Back to where we were
-        os.chdir(cwd)
 
         # Monitor time
         elapsed = time.time() - start_time
@@ -662,13 +688,6 @@ class cc2_case(object):
 
         raise NotImplementedError(self.NotImplementedMessage.format('_submit_transfer_cmd(self)', self.__class__.__name__))
 
-def available(cls):
-    if cls._target_machine is None:
-        raise NotImplementedError("_target_machine class variable not set for Class {:s}".format(cls.__name__))
-    else:
-        available_cases[cls._target_machine] = cls
-        return cls
-
 @available
 class daint_case(cc2_case):
     """Class defining a COSMO-CLM2 case on Piz Daint"""
@@ -676,6 +695,7 @@ class daint_case(cc2_case):
     _target_machine='daint'
     _n_tasks_per_node = 12
     _default_install_dir = os.path.normpath(os.environ['SCRATCH'])
+    _post_transfer_job = 'cc2_post_transfer_job'
 
 
     def __init__(self, run_time='24:00:00', account=None, partition=None,
@@ -689,7 +709,6 @@ class daint_case(cc2_case):
         self.pgi_version = pgi_version
         self.shebang = shebang
         self.partition = partition
-        self._transfer_id = None
         cc2_case.__init__(self, **base_case_args)
         if self.install and not self.cosmo_only:
             self._build_proc_config()
@@ -784,7 +803,7 @@ class daint_case(cc2_case):
         rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
                  '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile),
                  # - ML - test: Keep track of the environment
-                 'env | sort > env_.*$': 'env | sort > env_{:s}-{:s}\n'.format(d1_str, d2_str)}
+                 'env \| sort > env_.*$': 'env | sort > env_{:s}-{:s}'.format(d1_str, d2_str)}
         with open(os.path.join(self.path, self._run_job), mode='r+') as f:
             content = f.read()
             for pattern, repl in rules.items():
@@ -800,10 +819,9 @@ class daint_case(cc2_case):
 
         with open(os.path.join(self.path, self._transfer_job), mode='w') as script:
             # shebang
-            script.write('{:s}\n\n'.format(self.shebang))
+            script.write('#!/bin/bash -l\n\n')
 
             # slurm options
-            script.write('#SBATCH --constraint=gpu\n')
             script.write('#SBATCH --job-name=cc2_transfer\n')
             script.write('#SBATCH --ntasks=1\n')
             script.write('#SBATCH --output={:s}\n'.format(logfile))
@@ -812,9 +830,29 @@ class daint_case(cc2_case):
             script.write('#SBATCH --time={:s}\n'.format(self.transfer_time))
             script.write('#SBATCH --partition=xfer\n\n')
 
+            # Use sed commands to handle case status as python isn't available on the xfer queue.
+            # Otherwise just use cc2_control --action=transfer
+
+            # Update transfer status
+            line = "sed -i 's@\(\s*<transfer_status>\).*\(</transfer_status>\)@\\1transferring\\2@' {:s}\n"
+            script.write(line.format(self._xml_config))
             # start rsync process
-            script.write('rsync -avrL --files-from transfer_list {:s} {:s}'.format(
-                self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n\n'))
+            line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
+            script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n'))
+            # Update transfer status
+            line = "sed -i 's@\(\s*<transfer_status>\).*\(</transfer_status>\)@\\1complete\\2@' {:s}\n\n"
+            script.write(line.format(self._xml_config))
+
+            # Get run status
+            line = "run_status=$(sed -n 's@\s*<run_status>\(.*\)</run_status>@\\1@p' {:s})\n"
+            script.write(line.format(self._xml_config))
+            script.write('if [[ $run_status == "complete" ]]; then\n')
+            # Update run status
+            line = "    sed -i 's@\(\s*<run_status>\).*\(</run_status>\)@\\1submitted\\2@' {:s}\n"
+            script.write(line.format(self._xml_config))
+            # Submit next run
+            script.write('    sbatch {:s}\n'.format(self._run_job))
+            script.write('fi')
 
 
     def _update_transfer_job(self, d1, d2):
@@ -835,23 +873,16 @@ class daint_case(cc2_case):
 
     def _submit_run_cmd(self):
 
-        cmd = ['sbatch']
-
-        if not self.install:
-            dep_opt = '--dependency=afterok:' + os.environ['SLURM_JOB_ID']
-            if self._transfer_id is not None:
-                dep_opt += ':' + self._transfer_id
-            cmd += [dep_opt]
-
-        cmd += [self._run_job]
-
-        check_call(cmd)
+        cmd = 'sbatch ' + self._run_job
+        print('submitting run with check_call(' + cmd + ', shell=True)')
+        check_call(cmd, shell=True)
 
 
     def _submit_transfer_cmd(self):
 
-        # Set transfer_id and submit transfer job
-        self._transfer_id = str(check_output(['sbatch', '--parsable', self._transfer_job]).rstrip(b'\n'), 'utf-8')
+        cmd = 'sbatch ' + self._transfer_job
+        print('submitting transfer with check_call(' + cmd + ', shell=True)')
+        check_call(cmd, shell=True)
 
 
     def _run_fun(self):

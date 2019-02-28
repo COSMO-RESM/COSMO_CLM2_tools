@@ -9,6 +9,8 @@ def control_case():
     dsc = "Control a COSMO_CLM2 case"
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
     parser.add_argument('xml_path', help="path to xml file containing case description")
+    parser.add_argument('--action', choices=['run', 'transfer'], default='run',
+                        help="path to xml file containing case description")
     cfg = parser.parse_args()
 
     # build cc2case object from xml file
@@ -18,8 +20,30 @@ def control_case():
     case_args.update(get_xml_node_args(config.find(machine)))
     cc2case = cc2_case_factory(machine, **case_args)
 
-    # Submit next transfer and run
-    cc2case.submit_next()
+    if cfg.action == 'run':
+        # Submit next transfer
+        if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_by_chunck):
+            cc2case.transfer_status = 'submitted'
+            cc2case.submit_next_transfer()
 
-    # Run
-    cc2case.run()
+        # Run
+        cc2case.run_status = 'running'
+        cc2case.run()
+        cc2case.set_next_run()
+        cc2case.run_status = 'complete'
+
+        # Submit next run
+        if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):
+            cc2case.run_status = 'submitted'
+            cc2case.submit_next_run()
+
+    elif cfg.action == 'transfer':
+        # Transfer
+        cc2case.transfer_status = 'transferring'
+        cc2case.transfer_input()
+        cc2case.transfer_status = 'complete'
+
+        # Submit next run
+        if cc2case.run_status == 'complete':
+            cc2case.run_status = 'submitted'
+            cc2case.submit_next_run()

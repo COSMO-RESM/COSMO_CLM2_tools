@@ -71,9 +71,9 @@ def create_case():
     main_group.add_argument('--run_length', metavar='dt', action=cc2_act('main'),
                             help="sets simulation length if end_date not specified or run length\n"\
                             "between restarts otherwise\n"\
-                            "dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'\n"\
-                            "N1, N2 and N3 being arbitrary integers (N2>12 possible) and\n"\
-                            "'y', 'm' and 'd' stand for year, month and day")
+                            "dt is of the form 'N1yN2m', 'N1y', 'N2m' or 'N3d'\n"\
+                            "N1, N2 and N4 being arbitrary integers (N2>12 possible) and\n"\
+                            "'y', 'm' and 'd' standing for years, months and days")
     main_group.add_argument('--cos_in', action=cc2_act('main'),
                             help="COSMO input files directory (default: ./COSMO_input)")
     main_group.add_argument('--cos_nml', action=cc2_act('main'),
@@ -162,6 +162,7 @@ def create_case():
     # Submit case
     # ===========
     if opts.submit:
+        cc2case.run_status = 'submitted'
         cc2case.submit_run()
 
 def get_case_args(cmd_opts, cc2_cmd_args):

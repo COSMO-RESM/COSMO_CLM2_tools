@@ -13,26 +13,37 @@ def add_time_from_str(date1, dt_str):
     N1, N2 and N3 being arbitrary integers potentially including sign and
     'y', 'm' and 'd' the actual letters standing for year, month and day respectivly."""
 
-    ky, km, kd, ny, nm, nd = 0, 0, 0, 0, 0, 0
-    for k, c in enumerate(dt_str):
+    ny, nm, nd, nh = None, None, None, None
+    ks = 0
+    for ke, c in enumerate(dt_str):
         if c == 'y':
-            ky, ny = k, int(dt_str[0:k])
-        if c == 'm':
-            km, nm = k, int(dt_str[ky:k])
+            ny = int(dt_str[ks:ke])
+            ks = ke+1
+        elif c == 'm':
+            nm = int(dt_str[ks:ke])
+            ks = ke+1
+        elif c == 'd':
+            nd = int(dt_str[ks:ke])
+            ks = ke+1
+        elif c == 'h':
+            nh = int(dt_str[ks:ke])
+            ks = ke+1
 
-    if km == 0 and ky == 0:
-        for k, c in enumerate(dt_str):
-            if c == 'd':
-                kd, nd = k, int(dt_str[0:k])
-        if kd == 0:
-            raise ValueError("date increment '" + dt_str + "' doesn't have the correct format")
-        else:
-            return date1 + timedelta(days=nd)
-    else:
+    # Compute new date
+    if ny is not None or nm is not None:
         y2, m2, d2, h2 = date1.year, date1.month, date1.day, date1.hour
-        y2 += ny + (nm+m2-1) // 12
-        m2 = (nm+m2-1) % 12 + 1
+        if ny is not None:
+            y2 += ny
+        if nm is not None:
+            y2 += (nm+m2-1) // 12
+            m2 = (nm+m2-1) % 12 + 1
         return datetime(y2, m2, d2, h2)
+    elif nd is not None:
+        return date1 + timedelta(days=nd)
+    elif nh is not None:
+        return date1 + timedelta(hours=nh)
+    else:
+        raise ValueError("date increment '" + dt_str + "' doesn't have the correct format")
 
 
 def get_xml_node_args(node, exclude=()):
