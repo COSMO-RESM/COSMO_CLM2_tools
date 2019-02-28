@@ -833,24 +833,23 @@ class daint_case(cc2_case):
             # Use sed commands to handle case status as python isn't available on the xfer queue.
             # Otherwise just use cc2_control --action=transfer
 
-            # Update transfer status
-            line = "sed -i 's@\(\s*<transfer_status>\).*\(</transfer_status>\)@\\1transferring\\2@' {:s}\n"
-            script.write(line.format(self._xml_config))
-            # start rsync process
+            # Define functions to get and set case status
+            script.write('get_status(){\n')
+            script.write("    sed -n 's@\s*<'$1'_status>\(.*\)</'$1'_status>@\\1@p' {:s}\n".format(self._xml_config))
+            script.write('}\n')
+            script.write('set_status(){\n')
+            script.write("    sed -i 's@\(\s*<'$1'_status>\).*\(</'$1'_status>\)@\\1'$2'\\2@' {:s}\n".format(self._xml_config))
+            script.write('}\n\n')
+
+            # Transfer
+            script.write('set_status "transfer" "transferring"\n')
             line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
             script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n'))
-            # Update transfer status
-            line = "sed -i 's@\(\s*<transfer_status>\).*\(</transfer_status>\)@\\1complete\\2@' {:s}\n\n"
-            script.write(line.format(self._xml_config))
+            script.write('set_status "transfer" "complete"\n\n')
 
-            # Get run status
-            line = "run_status=$(sed -n 's@\s*<run_status>\(.*\)</run_status>@\\1@p' {:s})\n"
-            script.write(line.format(self._xml_config))
-            script.write('if [[ $run_status == "complete" ]]; then\n')
-            # Update run status
-            line = "    sed -i 's@\(\s*<run_status>\).*\(</run_status>\)@\\1submitted\\2@' {:s}\n"
-            script.write(line.format(self._xml_config))
             # Submit next run
+            script.write('if [[ $(get_status "run") == "complete" ]]; then\n')
+            script.write('    set_status "run" "submitted"\n')
             script.write('    sbatch {:s}\n'.format(self._run_job))
             script.write('fi')
 
