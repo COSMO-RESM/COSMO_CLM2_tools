@@ -32,6 +32,10 @@ def control_case():
         cc2case.set_next_run()
         cc2case.run_status = 'complete'
 
+        # Archive
+        if cc2case.archive_dir is not None:
+            cc2case.submit_transfer()
+
         # Submit next run
         if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):
             cc2case.run_status = 'submitted'

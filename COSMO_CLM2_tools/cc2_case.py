@@ -36,6 +36,7 @@ class cc2_case(object):
     _control_job = 'cc2_control_job'
     _run_job = 'cc2_run_job'
     _transfer_job = 'cc2_transfer_job'
+    _archive_job = 'cc2_archive_job'
     _xml_config = 'cc2_config.xml'
     NotImplementedMessage = "required method {:s} not implemented by class {:s}.\n" \
                             "Implement with a single pass statement if irrelevant to this machine."
@@ -289,10 +290,15 @@ class cc2_case(object):
 
     def submit_next_transfer(self):
 
+        cwd = os.getcwd()
+        os.chdir(self.path)
+
         next_end_date = self.get_next_run_end_date()
         self.build_transfer_list(self._run_end_date, next_end_date)
         self._update_transfer_job(self._run_end_date, next_end_date)
-        self.submit_transfer()
+        self._submit_transfer_cmd()
+
+        os.chdir(cwd)
 
 
     def _check_COSMO_input(self, start_date, end_date):
@@ -613,16 +619,32 @@ class cc2_case(object):
 
 
     def submit_run(self):
+
         cwd = os.getcwd()
         os.chdir(self.path)
+
         self._submit_run_cmd()
+
         os.chdir(cwd)
 
 
     def submit_transfer(self):
+
         cwd = os.getcwd()
         os.chdir(self.path)
+
         self._submit_transfer_cmd()
+
+        os.chdir(cwd)
+
+
+    def submit_archive(self):
+
+        cwd = os.getcwd()
+        os.chdir(self.path)
+
+        self._submit_archive_cmd()
+
         os.chdir(cwd)
 
 
@@ -671,6 +693,12 @@ class cc2_case(object):
         raise NotImplementedError(self.NotImplementedMessage.format('_update_transfer_job(self)', self.__class__.__name__))
 
 
+    def _build_archive_job(self):
+        """Place holder for _build_archive_job method to be implemented by machine specific classes."""
+
+        raise NotImplementedError(self.NotImplementedMessage.format('_build_archive_job(self)', self.__class__.__name__))
+
+
     def _run_fun(self):
         """Place holder for _run_fun method to be implemented by machine specific classes."""
 
@@ -687,6 +715,12 @@ class cc2_case(object):
         """Place holder for _submit_transfer_cmd method to be implemented by machine specific classes."""
 
         raise NotImplementedError(self.NotImplementedMessage.format('_submit_transfer_cmd(self)', self.__class__.__name__))
+
+
+    def _submit_archive_cmd(self):
+        """Place holder for _submit_archive_cmd method to be implemented by machine specific classes."""
+
+        raise NotImplementedError(self.NotImplementedMessage.format('_submit_archive_cmd(self)', self.__class__.__name__))
 
 @available
 class daint_case(cc2_case):
@@ -870,6 +904,74 @@ class daint_case(cc2_case):
             f.truncate()
 
 
+    def _build_archive_job(self):
+
+        # Shebang
+        script_str = '#!/bin/bash -l\n\n'
+
+        # Slurm options
+        script_str += '#SBATCH --partition=xfer\n'
+        script_str += '#SBATCH --ntasks=1\n'
+        script_str += '#SBATCH --time=03:00:00\n'
+        script_str += '#SBATCH --job-name=cc2_archive\n\n'
+
+        # Case dependent environment variables
+        script_str += 'CASE_NAME={:s}\n'.format(self.name)
+        script_str += 'archive_dir={:s}\n'.format(self.archive_dir)
+        # COSMO output streams
+        stream_list = ['"{:s}"'.format(os.path.normpath(gribout['ydir'])) for gribout in self._get_gribouts()]
+        script_str += 'COSMO_gribouts=({:s})\n'.format(' '.join(stream_list))
+        # CESM output streams
+        stream_list = ['"h0"']
+        for k in range(2,7):
+           if 'hist_fincl{:d}'.format(k) in self.nml['clm_in']['clm_inparm']:
+               stream_list += ['"h{:d}"'.format(k)]
+        script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
+
+        # Processing commands
+        script_str += '''
+mkdir -p ${archive_dir}
+while (( ${#} > 0 ))
+do
+    YYYY="$1"
+    m1="$2"
+    m2="$3"
+    for ((m=m1; m<=m2; m++)); do
+        MM=$(printf "%02d" ${m})
+        MMp1=$(printf "%02d" $((m%12+1)))
+        # Handle COSMO output
+        if ((${#COSMO_gribouts[@]} > 0)); then
+            for gribout in ${COSMO_gribouts[@]}; do
+                cd ${gribout}
+                arch_name=lffd${YYYY}${MM}.tgz
+                files=$(ls lffd${YYYY}${MM}* lffd${YYYY}${MMp1}0100* 2>/dev/null)
+                tar -zcvf ${arch_name} ${files} --exclude *c.nc --exclude *c
+                mkdir -p ${archive_dir}/${gribout}
+                rsync -avr ${arch_name} ${archive_dir}/${gribout}/ --remove-source-files
+                cd -
+            done
+        fi
+        # Handle CESM output
+        if ((${#CESM_hh[@]} > 0)); then
+            mkdir -p ${archive_dir}/CESM_output
+            for hh in ${CESM_hh[@]}; do
+                arch_name=${CASE_NAME}.clm2.${hh}.${YYYY}-${MM}.tgz
+                files=$(ls ${CASE_NAME}.clm2.${hh}.${YYYY}-${MM}* ${CASE_NAME}.clm2.${hh}.${YYYY}-${MMp1}-01-00000.nc 2>/dev/null)
+                tar -zcvf ${arch_name} ${files}
+                rsync -avr ${arch_name} ${archive_dir}/CESM_output/ --remove-source-files
+            done
+        fi
+    done
+    shift 3
+done'''
+
+        # Write script to file
+        with open(os.path.join(self.path, self._archive_job), mode='w') as script:
+            script.write(script_str)
+
+
+
+
     def _submit_run_cmd(self):
 
         cmd = 'sbatch ' + self._run_job
@@ -880,6 +982,33 @@ class daint_case(cc2_case):
     def _submit_transfer_cmd(self):
 
         cmd = 'sbatch ' + self._transfer_job
+        print('submitting transfer with check_call(' + cmd + ', shell=True)')
+        check_call(cmd, shell=True)
+
+
+    def _submit_archive_cmd(self):
+
+        # Build arguments list for archive job (years and months)
+        args_list = []
+        start_year_date = self._run_start_date
+        while start_year_date < self._run_end_date:
+            args_list += ['{:d}'.format(start_year_date.year)]
+            end_year_date = datetime(start_year_date.year+1, 1, 1)
+            if self._run_end_date >= end_year_date:
+                args_list += ['{:d}'.format(start_year_date.month), '12']
+                start_year_date = end_year_date
+            else:
+                args_list += ['{:d}'.format(d.month) for d in (start_year_date, self._run_end_date)]
+                start_year_date = self._run_end_date
+
+        # Build logfile name
+        d1_str = self._run_start_date.strftime(date_fmt['cesm'])
+        d2_str = self._run_end_date.strftime(date_fmt['cesm'])
+        logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
+
+        # Assemble full command and submit
+        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {args:s}'
+        cmd = cmd_tmpl.format(job=self._archive_job, args=' '.join(args_list), log=logfile)
         print('submitting transfer with check_call(' + cmd + ', shell=True)')
         check_call(cmd, shell=True)
 
