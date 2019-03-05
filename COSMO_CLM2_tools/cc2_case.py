@@ -734,10 +734,11 @@ class daint_case(cc2_case):
 
     def __init__(self, run_time='24:00:00', account=None, partition=None,
                  shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
-                 transfer_time='02:00:00', **base_case_args):
+                 transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
 
         self.run_time = run_time
         self.transfer_time = transfer_time
+        self.archive_time = archive_time
         self.account = account
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version

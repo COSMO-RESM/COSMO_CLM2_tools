@@ -118,6 +118,8 @@ def create_case():
                             "(default: '24:00:00' on daint, '08:00:00' on mistral)")
     main_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
                             help="reserved time for transfer job (default: '02:00:00')")
+    main_group.add_argument('--archive_time', action=cc2_act('daint', 'mistral'),
+                            help="reserved time for archive job (default: '03:00:00')")
 
     slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager.\n'\
                                             '(common to all machines using the slurm scheduler)')
