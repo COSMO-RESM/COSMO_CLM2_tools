@@ -60,6 +60,8 @@ def create_case():
     main_group.add_argument('--name', action=cc2_act('main'), help="case name (default: COSMO_CLM2)")
     main_group.add_argument('--install_dir', action=cc2_act('main'),
                             help="directory where the case is installed (default: $SCRATCH on daint)")
+    main_group.add_argument('--archive_dir', action=cc2_act('main'),
+                            help="directory where output and restart files are archived (default: None)")
     main_group.add_argument('--cosmo_only', action=cc2_act('main'), type=str_to_bool,
                             help="run only cosmo with build-in soil model TERRA\n"\
                             "(type: bool, using anything Python can parse as a boolean, default: False)\n"\
