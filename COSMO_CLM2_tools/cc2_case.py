@@ -140,6 +140,8 @@ class cc2_case(object):
         if start_date is not None:
             self._start_date = datetime.strptime(start_date, date_fmt['in'])
             self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt['cosmo'])
+            if not self.cosmo_only:
+                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._start_date.strftime(date_fmt['cesm']))
         elif 'ydate_ini' in self.nml['INPUT_ORG']['runctl']:
             self._start_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_ini'],
                                                  date_fmt['cosmo'])
