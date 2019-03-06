@@ -6,6 +6,7 @@
   <main>
     <name>COSMO_CLM2</name>
     <install_dir></install_dir>
+    <archive_dir></archive_dir>
     <cosmo_only></cosmo_only>
     <start_date></start_date>
     <end_date></end_date>
@@ -24,9 +25,8 @@
     <ncesm type="int"></ncesm>
     <gpu_mode type="py_eval">False</gpu_mode>
     <dummy_day type="py_eval">False</dummy_day>
-    <run_time>24:00:00</run_time>
-    <transfer_all type="py_eval">False</transfer_all>>
-    <transfer_time>02:00:00</transfer_time>
+    <transfer_all type="py_eval">False</transfer_all>
+    <input_type>file</input_type>
   </main>
   <daint>
     <account></account>
@@ -34,10 +34,14 @@
     <modules_opt>switch</modules_opt>
     <pgi_version></pgi_version>
     <shebang>#!/bin/bash</shebang>
+    <run_time>24:00:00</run_time>
+    <transfer_time>02:00:00</transfer_time>
+    <archive_time>03:00:00</archive_time>
   </daint>
   <mistral>
     <account></account>
     <partition></partition>
+    <run_time>10:00:00</run_time>
   </mistral>
   <!-- Any namelist parameter can be changed by adding a <change_par> node directly under the <setup> node
        with attributes following this example
