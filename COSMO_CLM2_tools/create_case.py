@@ -167,7 +167,6 @@ def create_case():
     # Change/delete namelists parameters following xml file
     # =====================================================
     modify_nml_from_xml(cc2case, opts)
-    cc2case.write_open_nml()
 
     # Submit case
     # ===========
@@ -183,7 +182,7 @@ def get_case_args(cmd_opts, cc2_cmd_args):
     machine = cmd_opts.machine
 
     xml_file = cmd_opts.setup_file
-    if xml_file:
+    if xml_file is not None:
         tree_root = ET.parse(xml_file).getroot()
         main_node = tree_root.find('main')
         if machine is None:
@@ -195,10 +194,10 @@ def get_case_args(cmd_opts, cc2_cmd_args):
     if machine is None:
         raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
 
-    main_args = get_xml_node_args(main_node) if xml_file else {}
+    main_args = get_xml_node_args(main_node) if xml_file is not None else {}
     main_args.update(cc2_cmd_args['main'])
 
-    machine_args = get_xml_node_args(machine_node) if xml_file else {}
+    machine_args = get_xml_node_args(machine_node) if xml_file is not None else {}
     machine_args.update(cc2_cmd_args[machine])
 
     cc2_args = {k:v for k,v in main_args.items() if v is not None}
@@ -264,3 +263,6 @@ def modify_nml_from_xml(cc2case, cmd_opts):
                 del cc2case.nml[name][block][param]
             else:
                 del cc2case.nml[name][block][int(n)-1][param]
+
+    # Write namelists to file
+    cc2case.write_open_nml()

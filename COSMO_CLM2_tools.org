@@ -1664,7 +1664,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           # Change/delete namelists parameters following xml file
           # =====================================================
           modify_nml_from_xml(cc2case, opts)
-          cc2case.write_open_nml()
 
           # Submit case
           # ===========
@@ -1682,7 +1681,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           machine = cmd_opts.machine
 
           xml_file = cmd_opts.setup_file
-          if xml_file:
+          if xml_file is not None:
               tree_root = ET.parse(xml_file).getroot()
               main_node = tree_root.find('main')
               if machine is None:
@@ -1694,10 +1693,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           if machine is None:
               raise ValueError("'machine' option has to be given either by the command line or the xml setup file")
 
-          main_args = get_xml_node_args(main_node) if xml_file else {}
+          main_args = get_xml_node_args(main_node) if xml_file is not None else {}
           main_args.update(cc2_cmd_args['main'])
 
-          machine_args = get_xml_node_args(machine_node) if xml_file else {}
+          machine_args = get_xml_node_args(machine_node) if xml_file is not None else {}
           machine_args.update(cc2_cmd_args[machine])
 
           cc2_args = {k:v for k,v in main_args.items() if v is not None}
@@ -1712,7 +1711,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           if cmd_opts.setup_file is None:
               return
-    
+
           tree_root = ET.parse(cmd_opts.setup_file).getroot()
 
           # Change parameters
@@ -1766,6 +1765,8 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   else:
                       del cc2case.nml[name][block][int(n)-1][param]
 
+          # Write namelists to file
+          cc2case.write_open_nml()
     #+END_SRC
 ** control_case.py
    - [ ] The xml part of it could go to a bla_from_xml factory function
