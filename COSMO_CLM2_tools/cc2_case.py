@@ -944,7 +944,7 @@ class daint_case(cc2_case):
 
         # Case dependent environment variables
         script_str += 'CASE_NAME={:s}\n'.format(self.name)
-        script_str += 'archive_dir={:s}\n'.format(self.archive_dir)
+        script_str += 'archive_dir={:s}\n'.format(os.path.join(self.archive_dir, self.name))
         # COSMO output streams
         stream_list = ['"{:s}"'.format(os.path.normpath(gribout['ydir'])) for gribout in self._get_gribouts()]
         script_str += 'COSMO_gribouts=({:s})\n'.format(' '.join(stream_list))
