@@ -1,4 +1,4 @@
-# Created 2019-02-14 Thu 12:14
+# Created 2019-03-06 Wed 14:03
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -38,11 +38,14 @@ the cc2_create_case command. This is the result of =cc2_create_case
                          [--gpu_mode GPU_MODE] [--dummy_day DUMMY_DAY]
                          [--input_type {file,symlink}]
                          [--transfer_all TRANSFER_ALL] [--run_time RUN_TIME]
-                         [--transfer_time TRANSFER_TIME] [--account ACCOUNT]
+                         [--transfer_time TRANSFER_TIME]
+                         [--archive_time ARCHIVE_TIME] [--account ACCOUNT]
                          [--partition PARTITION]
                          [--modules_opt {switch,none,purge}]
                          [--pgi_version PGI_VERSION] [--shebang SHEBANG]
-                         [--no_submit] [--gen_oasis]
+                         [--archive_per_month ARCHIVE_PER_MONTH]
+                         [--archive_compression {none,gzip,bzip2}] [--no_submit]
+                         [--gen_oasis]
 
   Set up and run a COSMO_CLM2 case
   --------------------------------
@@ -72,9 +75,9 @@ the cc2_create_case command. This is the result of =cc2_create_case
     --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
     --run_length dt       sets simulation length if end_date not specified or run length
                           between restarts otherwise
-                          dt is of the form 'N1yN2m' or 'N1y' or 'N2m' or 'N3d'
-                          N1, N2 and N3 being arbitrary integers (N2>12 possible) and
-                          'y', 'm' and 'd' stand for year, month and day
+                          dt is of the form 'N1yN2m', 'N1y', 'N2m' or 'N3d'
+                          N1, N2 and N4 being arbitrary integers (N2>12 possible) and
+                          'y', 'm' and 'd' standing for years, months and days
     --cos_in COS_IN       COSMO input files directory (default: ./COSMO_input)
     --cos_nml COS_NML     COSMO namelists directory (default: ./COSMO_nml)
     --cos_exe COS_EXE     path to COSMO executable (default: ./cosmo)
@@ -100,11 +103,13 @@ the cc2_create_case command. This is the result of =cc2_create_case
                           default: file
     --transfer_all TRANSFER_ALL
                           Transfer all model input files at once before starting the simulation
-                          (type: bool, using anything Python can parse as a boolean, default: False)
+                          (type: bool, using anything Python can parse as a boolean, default: True)
     --run_time RUN_TIME   reserved time on compute nodes
                           (default: '24:00:00' on daint, '08:00:00' on mistral)
     --transfer_time TRANSFER_TIME
                           reserved time for transfer job (default: '02:00:00')
+    --archive_time ARCHIVE_TIME
+                          reserved time for archive job (default: '03:00:00')
 
   slurm:
     Options specific to the slurm workload manager.
@@ -119,10 +124,15 @@ the cc2_create_case command. This is the result of =cc2_create_case
     Options specific to the Piz Daint machine
 
     --modules_opt {switch,none,purge}
-                          Option for loading modules at run time (default: switch)
+                          option for loading modules at run time (default: switch)
     --pgi_version PGI_VERSION
                           specify pgi compiler version at run time (default: None)
     --shebang SHEBANG     submit script shebang (default: #!/bin/bash)
+    --archive_per_month ARCHIVE_PER_MONTH
+                          submit one archiving job per month. For massive output simulations.
+                          (type: bool, using anything Python can parse as a boolean, default: False)
+    --archive_compression {none,gzip,bzip2}
+                          select the compression algorithm (default: 'gzip')
 
   cmd line:
     Options only avialble to the command line (no xml)
