@@ -2053,7 +2053,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
    
 ** __init__.py
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/__init__.py :comments no
-     __version__ = '0.2'
+     __version__ = '0.3'
    #+END_SRC
 
 * setup.py                                                         :noexport:
