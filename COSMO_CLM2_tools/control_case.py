@@ -34,7 +34,7 @@ def control_case():
 
         # Archive
         if cc2case.archive_dir is not None:
-            cc2case.submit_transfer()
+            cc2case.submit_archive()
 
         # Submit next run
         if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):

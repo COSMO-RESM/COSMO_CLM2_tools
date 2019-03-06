@@ -204,7 +204,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 *** preamble
     #+BEGIN_SRC python
       from __future__ import print_function
-      from .tools import date_fmt, add_time_from_str, COSMO_input_file_name
+      from .tools import date_fmt, add_time_from_str, COSMO_input_file_name, indent_xml
       from subprocess import check_call, check_output
       from argparse import ArgumentParser, RawTextHelpFormatter
       import f90nml
@@ -263,9 +263,9 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
 
           def __init__(self, name='COSMO_CLM2', install_dir=None, install=False,
-                       cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo', cos_in_file_size=None,
+                       cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo',
                        cesm_nml='./CESM_nml', cesm_in='./CESM_input', cesm_exe='./cesm.exe',
-                       oas_in='./OASIS_input', oas_nml='./OASIS_nml',
+                       oas_in='./OASIS_input', oas_nml='./OASIS_nml', archive_dir=None,
                        start_date=None, end_date=None, run_length=None,
                        ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                        gpu_mode=False, dummy_day=True, cosmo_only=False,
@@ -278,11 +278,11 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               self.dummy_day = dummy_day
               self.cosmo_only = cosmo_only
               self.gen_oasis = gen_oasis
-              self.cos_in_file_size = cos_in_file_size
               self.cos_in = os.path.abspath(cos_in)
               self.install = install
               self.input_type = input_type
               self.transfer_all = transfer_all
+              self.archive_dir = None if archive_dir is None else os.path.abspath(archive_dir)
               self.transfer_by_chunck = not self.transfer_all and self.input_type == 'file'
               # Create namelists dictionnary
               self.nml = nmldict(self)
@@ -309,9 +309,11 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   self._build_run_job()
                   if self.transfer_by_chunck and self._run_end_date < self.end_date:
                       self._build_transfer_job()
+                  if self.archive_dir is not None:
+                      self._build_archive_job()
                   self._create_missing_dirs()
-                  self.install_input()
                   self.to_xml()
+                  self.install_input()
               # Write modified namelists to file
               self.write_open_nml()
 
@@ -378,6 +380,16 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   self._end_date = None
 
           @property
+          def cos_in_file_size(self):
+              status_node = ET.parse(os.path.join(self.path, self._xml_config)).getroot().find('status')
+              return int(status_node.find('cos_in_file_size').text)
+          @cos_in_file_size.setter
+          def cos_in_file_size(self, sz):
+              tree = ET.parse(os.path.join(self.path, self._xml_config))
+              tree.find('status').find('cos_in_file_size').text = str(sz)
+              tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
+
+          @property
           def run_status(self):
               status_node = ET.parse(os.path.join(self.path, self._xml_config)).getroot().find('status')
               return status_node.find('run_status').text
@@ -395,6 +407,17 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           def transfer_status(self, status):
               tree = ET.parse(os.path.join(self.path, self._xml_config))
               tree.find('status').find('transfer_status').text = status
+              tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
+
+          @property
+          def prev_run_start_date(self):
+              status_node = ET.parse(os.path.join(self.path, self._xml_config)).getroot().find('status')
+              date = status_node.find('prev_run_start_date').text
+              return None if date is None else datetime.strptime(date, date_fmt['in'])
+          @prev_run_start_date.setter
+          def prev_run_start_date(self, date):
+              tree = ET.parse(os.path.join(self.path, self._xml_config))
+              tree.find('status').find('prev_run_start_date').text = date.strftime(date_fmt['in'])
               tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
 
 
@@ -525,15 +548,16 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
               delta, ext = self._cos_input_delta_ext()
               cur_date = start_date
+              cos_in_file_size = self.cos_in_file_size # get from xml once for all
               while cur_date <= end_date:
                   file_name = COSMO_input_file_name('lbfd', cur_date, ext)
                   file_path = os.path.join(self.path, 'COSMO_input', file_name)
                   if not os.path.exists(file_path):
                       raise ValueError("COSMO input file {:s} missing".format(file_name))
                   fs = os.stat(file_path).st_size
-                  if fs != self.cos_in_file_size:
+                  if fs != cos_in_file_size:
                       err_mess = "COSMO input file {:s} has byte size {:d} instead of {:d}"
-                      raise ValueError(err_mess.format(file_name, fs, self.cos_in_file_size))
+                      raise ValueError(err_mess.format(file_name, fs, cos_in_file_size))
                   cur_date += delta
 
 
@@ -769,21 +793,6 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           def to_xml(self):
 
-              def indent(elem, level=0):
-                  i = "\n" + level*"  "
-                  if len(elem):
-                      if not elem.text or not elem.text.strip():
-                          elem.text = i + "  "
-                      if not elem.tail or not elem.tail.strip():
-                          elem.tail = i
-                      for elem in elem:
-                          indent(elem, level+1)
-                      if not elem.tail or not elem.tail.strip():
-                          elem.tail = i
-                  else:
-                      if level and (not elem.tail or not elem.tail.strip()):
-                          elem.tail = i
-
               config_node = ET.Element('config')
               tree = ET.ElementTree(config_node)
               ET.SubElement(config_node, 'machine').text = self._target_machine
@@ -798,20 +807,22 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               if not self.cosmo_only:
                   ET.SubElement(main_node, 'cesm_exe').text = self.cesm_exe
               ET.SubElement(main_node, 'cos_in').text = self.cos_in
-              ET.SubElement(main_node, 'cos_in_file_size', type='int').text = str(self.cos_in_file_size)
+              ET.SubElement(main_node, 'archive_dir').text = self.archive_dir
               ET.SubElement(main_node, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
               ET.SubElement(main_node, 'dummy_day', type='py_eval').text = str(self.dummy_day)
               ET.SubElement(main_node, 'transfer_all', type='py_eval').text = str(self.transfer_all)
 
               status_node = ET.SubElement(config_node, 'status')
-              ET.SubElement(status_node, 'run_status').text = 'none'
-              ET.SubElement(status_node, 'transfer_status').text = 'none'
+              ET.SubElement(status_node, 'run_status')
+              ET.SubElement(status_node, 'transfer_status')
+              ET.SubElement(status_node, 'cos_in_file_size')
+              ET.SubElement(status_node, 'prev_run_start_date')
 
               # - ML - Could be usefull in case machine specific arguments need to be stored one day.
               #        This isn't the case as of now
               ET.SubElement(config_node, self._target_machine)
 
-              indent(config_node)
+              indent_xml(config_node)
 
               tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
 
@@ -956,19 +967,24 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           def __init__(self, run_time='24:00:00', account=None, partition=None,
                        shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
-                       transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
+                       transfer_time='02:00:00', archive_time='03:00:00', archive_per_month=False,
+                       archive_compression='gzip', **base_case_args):
 
               self.run_time = run_time
               self.transfer_time = transfer_time
               self.archive_time = archive_time
+              self.archive_per_month = archive_per_month
+              self.archive_compression = archive_compression
               self.account = account
               self.modules_opt = modules_opt
               self.pgi_version = pgi_version
               self.shebang = shebang
               self.partition = partition
               cc2_case.__init__(self, **base_case_args)
-              if self.install and not self.cosmo_only:
-                  self._build_proc_config()
+              if self.install:
+                  if not self.cosmo_only:
+                      self._build_proc_config()
+                  self.update_xml_config()
 
 
           @property
@@ -981,6 +997,14 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                   self._account = os.path.normpath(os.environ['PROJECT']).split(os.path.sep)[-2]
               else:
                   self._account = acc
+
+
+          def update_xml_config(self):
+              tree = ET.parse(os.path.join(self.path, self._xml_config))
+              daint_node = tree.find('daint')
+              ET.SubElement(daint_node, 'archive_per_month', type='py_eval').text = str(self.archive_per_month)
+              indent_xml(tree.getroot())
+              tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
 
 
           def _build_run_job(self):
@@ -1147,52 +1171,61 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               # CESM output streams
               stream_list = ['"h0"']
               for k in range(2,7):
-                 if 'hist_fincl{:d}'.format(k) in self.nml['clm_in']['clm_inparm']:
-                     stream_list += ['"h{:d}"'.format(k)]
+                 if 'hist_fincl{:d}'.format(k) in self.nml['lnd_in']['clm_inparm']:
+                     stream_list += ['"h{:d}"'.format(k-1)]
               script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
 
               # Processing commands
+              if self.archive_compression == 'none':
+                  tar_ext = 'tar'
+                  tar_opt = 'cvf'
+              elif self.archive_compression == 'gzip':
+                  tar_ext = 'tgz'
+                  tar_opt = 'zcvf'
+              elif self.archive_compression == 'bzip2':
+                  tar_ext = 'tbz'
+                  tar_opt = 'jcvf'
+
               script_str += '''
-      mkdir -p ${archive_dir}
-      while (( ${#} > 0 ))
+      mkdir -p ${{archive_dir}}
+      mkdir -p ${{archive_dir}}/CESM_output
+
+      while (( ${{#}} > 0 ))
       do
           YYYY="$1"
           m1="$2"
           m2="$3"
           for ((m=m1; m<=m2; m++)); do
-              MM=$(printf "%02d" ${m})
+              MM=$(printf "%02d" ${{m}})
               MMp1=$(printf "%02d" $((m%12+1)))
               # Handle COSMO output
-              if ((${#COSMO_gribouts[@]} > 0)); then
-                  for gribout in ${COSMO_gribouts[@]}; do
-                      cd ${gribout}
-                      arch_name=lffd${YYYY}${MM}.tgz
-                      files=$(ls lffd${YYYY}${MM}* lffd${YYYY}${MMp1}0100* 2>/dev/null)
-                      tar -zcvf ${arch_name} ${files} --exclude *c.nc --exclude *c
-                      mkdir -p ${archive_dir}/${gribout}
-                      rsync -avr ${arch_name} ${archive_dir}/${gribout}/ --remove-source-files
+              if ((${{#COSMO_gribouts[@]}} > 0)); then
+                  for gribout in ${{COSMO_gribouts[@]}}; do
+                      cd ${{gribout}}
+                      arch_name=lffd${{YYYY}}${{MM}}.{ext:s}
+                      files=$(ls lffd${{YYYY}}${{MM}}* lffd${{YYYY}}${{MMp1}}0100* 2>/dev/null)
+                      tar -{opt:s} ${{arch_name}} ${{files}} --exclude *c.nc --exclude *c --remove-files
+                      mkdir -p ${{archive_dir}}/${{gribout}}
+                      rsync -avr ${{arch_name}} ${{archive_dir}}/${{gribout}}/ --remove-source-files
                       cd -
                   done
               fi
               # Handle CESM output
-              if ((${#CESM_hh[@]} > 0)); then
-                  mkdir -p ${archive_dir}/CESM_output
-                  for hh in ${CESM_hh[@]}; do
-                      arch_name=${CASE_NAME}.clm2.${hh}.${YYYY}-${MM}.tgz
-                      files=$(ls ${CASE_NAME}.clm2.${hh}.${YYYY}-${MM}* ${CASE_NAME}.clm2.${hh}.${YYYY}-${MMp1}-01-00000.nc 2>/dev/null)
-                      tar -zcvf ${arch_name} ${files}
-                      rsync -avr ${arch_name} ${archive_dir}/CESM_output/ --remove-source-files
+              if ((${{#CESM_hh[@]}} > 0)); then
+                  for hh in ${{CESM_hh[@]}}; do
+                      arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYY}}-${{MM}}.{ext:s}
+                      files=$(ls ${{CASE_NAME}}.clm2.${{hh}}.${{YYYY}}-${{MM}}* ${{CASE_NAME}}.clm2.${{hh}}.${{YYYY}}-${{MMp1}}-01-00000.nc 2>/dev/null)
+                      tar -{opt:s} ${{arch_name}} ${{files}} --remove-files
+                      rsync -avr ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
                   done
               fi
           done
           shift 3
-      done'''
+      done'''.format(ext=tar_ext, opt=tar_opt)
 
               # Write script to file
               with open(os.path.join(self.path, self._archive_job), mode='w') as script:
                   script.write(script_str)
-
-
 
 
           def _submit_run_cmd(self):
@@ -1211,29 +1244,65 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           def _submit_archive_cmd(self):
 
-              # Build arguments list for archive job (years and months)
-              args_list = []
-              start_year_date = self._run_start_date
-              while start_year_date < self._run_end_date:
-                  args_list += ['{:d}'.format(start_year_date.year)]
-                  end_year_date = datetime(start_year_date.year+1, 1, 1)
-                  if self._run_end_date >= end_year_date:
-                      args_list += ['{:d}'.format(start_year_date.month), '12']
-                      start_year_date = end_year_date
+              def _submit_archive_chunck(start_date, end_date):
+
+                  cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {args:s}'
+
+                  if self.archive_per_month:
+                      cur_start_date = start_date
+                      while cur_start_date < end_date:
+                          # Compute current end date
+                          # (all this in case the chunck doesn't start the first day of the month at 00:00)
+                          cur_end_date = add_time_from_str(datetime(cur_start_date.year, cur_start_date.month, 1), '1m')
+
+                          # Build arguments list for archive job (years and months)
+                          args_list = [str(cur_start_date.year), str(cur_start_date.month), str(cur_start_date.month)]
+
+                          # Build logfile name
+                          d1_str = cur_start_date.strftime(date_fmt['cesm'])
+                          d2_str = cur_end_date.strftime(date_fmt['cesm'])
+                          logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
+
+                          # Assemble full command and submit
+                          cmd = cmd_tmpl.format(job=self._archive_job, args=' '.join(args_list), log=logfile)
+                          print('submitting archive with check_call(' + cmd + ', shell=True)')
+                          check_call(cmd, shell=True)
+
+                          # Shift current start date
+                          cur_start_date = cur_end_date
                   else:
-                      args_list += ['{:d}'.format(d.month) for d in (start_year_date, self._run_end_date)]
-                      start_year_date = self._run_end_date
+                      # Build arguments list for archive job (years and months)
+                      args_list = []
+                      start_year_date = start_date
+                      while start_year_date < end_date:
+                          args_list += ['{:d}'.format(start_year_date.year)]
+                          end_year_date = datetime(start_year_date.year+1, 1, 1)
+                          if end_date >= end_year_date:
+                              args_list += ['{:d}'.format(start_year_date.month), '12']
+                              start_year_date = end_year_date
+                          else:
+                              args_list += ['{:d}'.format(d.month) for d in (start_year_date, end_date)]
+                              start_year_date = end_date
 
-              # Build logfile name
-              d1_str = self._run_start_date.strftime(date_fmt['cesm'])
-              d2_str = self._run_end_date.strftime(date_fmt['cesm'])
-              logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
+                      # Build logfile name
+                      d1_str = start_date.strftime(date_fmt['cesm'])
+                      d2_str = end_date.strftime(date_fmt['cesm'])
+                      logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
 
-              # Assemble full command and submit
-              cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {args:s}'
-              cmd = cmd_tmpl.format(job=self._archive_job, args=' '.join(args_list), log=logfile)
-              print('submitting transfer with check_call(' + cmd + ', shell=True)')
-              check_call(cmd, shell=True)
+                      # Assemble full command and submit
+                      cmd = cmd_tmpl.format(job=self._archive_job, args=' '.join(args_list), log=logfile)
+                      print('submitting archive with check_call(' + cmd + ', shell=True)')
+                      check_call(cmd, shell=True)
+
+              # Archive previous chunck
+              if self.prev_run_start_date is not None and self._run_start_date > self.start_date:
+                  _submit_archive_chunck(self.prev_run_start_date, self._run_start_date)
+
+              # Archive last chunck
+              if self._run_end_date >= self.end_date:
+                  _submit_archive_chunck(self._run_start_date, self.end_date)
+
+              self.prev_run_start_date = self._run_start_date
 
 
           def _run_fun(self):
@@ -1525,6 +1594,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           main_group.add_argument('--transfer_all', action=cc2_act('main'), type=str_to_bool,
                                   help="Transfer all model input files at once before starting the simulation\n"\
                                   "(type: bool, using anything Python can parse as a boolean, default: True)")
+          # Times are added to daint and mistral groups explicitly, not main, in order to allow for different defaults
           main_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
                                   help="reserved time on compute nodes\n"\
                                   "(default: '24:00:00' on daint, '08:00:00' on mistral)")
@@ -1543,11 +1613,16 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
           daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
           daint_group.add_argument('--modules_opt', action=cc2_act('daint'), choices=['switch', 'none', 'purge'],
-                                   help="Option for loading modules at run time (default: switch)")
+                                   help="option for loading modules at run time (default: switch)")
           daint_group.add_argument('--pgi_version', action=cc2_act('daint'),
                                    help="specify pgi compiler version at run time (default: None)")
           daint_group.add_argument('--shebang', action=cc2_act('daint'),
                                    help="submit script shebang (default: #!/bin/bash)")
+          daint_group.add_argument('--archive_per_month', action=cc2_act('daint'), type=str_to_bool,
+                                   help="submit one archiving job per month. For massive output simulations.\n"
+                                   "(type: bool, using anything Python can parse as a boolean, default: False)")
+          daint_group.add_argument('--archive_compression', action=cc2_act('daint'), choices=['none', 'gzip', 'bzip2'],
+                                   help="select the compression algorithm (default: 'gzip')")
 
           cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
           cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
@@ -1713,7 +1788,7 @@ Tools for automated creation and run of COSMO_CLM2 simulations
 
              # Archive
              if cc2case.archive_dir is not None:
-                 cc2case.submit_transfer()
+                 cc2case.submit_archive()
 
              # Submit next run
              if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):
@@ -1810,6 +1885,22 @@ Tools for automated creation and run of COSMO_CLM2 simulations
                                           + " has to be a valid python type or 'py_eval'")
 
          return xml_args
+
+
+     def indent_xml(elem, level=0):
+         i = "\n" + level*"  "
+         if len(elem):
+             if not elem.text or not elem.text.strip():
+                 elem.text = i + "  "
+             if not elem.tail or not elem.tail.strip():
+                 elem.tail = i
+             for elem in elem:
+                 indent_xml(elem, level+1)
+             if not elem.tail or not elem.tail.strip():
+                 elem.tail = i
+         else:
+             if level and (not elem.tail or not elem.tail.strip()):
+                 elem.tail = i
    #+END_SRC
 ** compile_clm.py
    #+BEGIN_SRC python :tangle COSMO_CLM2_tools/compile_clm.py :comments no

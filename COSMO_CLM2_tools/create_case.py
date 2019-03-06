@@ -113,6 +113,7 @@ def create_case():
     main_group.add_argument('--transfer_all', action=cc2_act('main'), type=str_to_bool,
                             help="Transfer all model input files at once before starting the simulation\n"\
                             "(type: bool, using anything Python can parse as a boolean, default: True)")
+    # Times are added to daint and mistral groups explicitly, not main, in order to allow for different defaults
     main_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
                             help="reserved time on compute nodes\n"\
                             "(default: '24:00:00' on daint, '08:00:00' on mistral)")
@@ -131,11 +132,16 @@ def create_case():
 
     daint_group = parser.add_argument_group('daint', 'Options specific to the Piz Daint machine')
     daint_group.add_argument('--modules_opt', action=cc2_act('daint'), choices=['switch', 'none', 'purge'],
-                             help="Option for loading modules at run time (default: switch)")
+                             help="option for loading modules at run time (default: switch)")
     daint_group.add_argument('--pgi_version', action=cc2_act('daint'),
                              help="specify pgi compiler version at run time (default: None)")
     daint_group.add_argument('--shebang', action=cc2_act('daint'),
                              help="submit script shebang (default: #!/bin/bash)")
+    daint_group.add_argument('--archive_per_month', action=cc2_act('daint'), type=str_to_bool,
+                             help="submit one archiving job per month. For massive output simulations.\n"
+                             "(type: bool, using anything Python can parse as a boolean, default: False)")
+    daint_group.add_argument('--archive_compression', action=cc2_act('daint'), choices=['none', 'gzip', 'bzip2'],
+                             help="select the compression algorithm (default: 'gzip')")
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
