@@ -49,7 +49,8 @@ class cc2_case(object):
                  start_date=None, end_date=None, run_length=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, dummy_day=True, cosmo_only=False,
-                 gen_oasis=False, input_type='file', transfer_all=True):
+                 gen_oasis=False, input_type='file', transfer_all=True,
+                 archive_rm=False):
 
         # Basic init (no particular work required)
         self.name = name
@@ -63,6 +64,7 @@ class cc2_case(object):
         self.input_type = input_type
         self.transfer_all = transfer_all
         self.archive_dir = None if archive_dir is None else os.path.abspath(archive_dir)
+        self.archive_rm = archive_rm
         self.transfer_by_chunck = not self.transfer_all and self.input_type == 'file'
         # Create namelists dictionnary
         self.nml = nmldict(self)
@@ -956,6 +958,7 @@ class daint_case(cc2_case):
         script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
 
         # Processing commands
+        tar_rm = '--remove-files' if self.archive_rm else ''
         if self.archive_compression == 'none':
             tar_ext = 'tar'
             tar_opt = 'cvf'
@@ -970,38 +973,51 @@ class daint_case(cc2_case):
 mkdir -p ${{archive_dir}}
 mkdir -p ${{archive_dir}}/CESM_output
 
-while (( ${{#}} > 0 ))
-do
+while (( ${{#}} > 0 )); do
     YYYY="$1"
+    echo "treating year ${{YYYY}}"
     m1="$2"
     m2="$3"
     for ((m=m1; m<=m2; m++)); do
-        MM=$(printf "%02d" ${{m}})
-        MMp1=$(printf "%02d" $((m%12+1)))
+        echo "treating month ${{m}}"
         # Handle COSMO output
+        YYYYMM=${{YYYY}}$(printf "%02d" ${{m}})
+        YYYYMMp1=$((YYYY + m/12))$(printf "%02d" $((m%12+1)))
         if ((${{#COSMO_gribouts[@]}} > 0)); then
             for gribout in ${{COSMO_gribouts[@]}}; do
+                echo "handling COSMO stream ${{gribout}}"
                 cd ${{gribout}}
-                arch_name=lffd${{YYYY}}${{MM}}.{ext:s}
-                files=$(ls lffd${{YYYY}}${{MM}}* lffd${{YYYY}}${{MMp1}}0100* 2>/dev/null)
-                tar -{opt:s} ${{arch_name}} ${{files}} --exclude *c.nc --exclude *c --remove-files
-                mkdir -p ${{archive_dir}}/${{gribout}}
-                rsync -avr ${{arch_name}} ${{archive_dir}}/${{gribout}}/ --remove-source-files
+                arch_name=lffd${{YYYYMM}}.{ext:s}
+                files=$(ls lffd${{YYYYMM}}* lffd${{YYYYMMp1}}0100* 2>/dev/null)
+                if (( ${{#files}} > 0 )); then
+                    echo "preparing ${{arch_name}} with files ${{files}}"
+                    tar -{opt:s} ${{arch_name}} ${{files}} --exclude *c.nc --exclude *c {rm:s}
+                    mkdir -p ${{archive_dir}}/${{gribout}}
+                    echo "sending ${{arch_name}} to archive directory"
+                    rsync -avr ${{arch_name}} ${{archive_dir}}/${{gribout}}/ --remove-source-files
+                fi
                 cd -
             done
         fi
         # Handle CESM output
+        YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
+        YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
         if ((${{#CESM_hh[@]}} > 0)); then
             for hh in ${{CESM_hh[@]}}; do
-                arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYY}}-${{MM}}.{ext:s}
-                files=$(ls ${{CASE_NAME}}.clm2.${{hh}}.${{YYYY}}-${{MM}}* ${{CASE_NAME}}.clm2.${{hh}}.${{YYYY}}-${{MMp1}}-01-00000.nc 2>/dev/null)
-                tar -{opt:s} ${{arch_name}} ${{files}} --remove-files
-                rsync -avr ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
+                echo "handling CESM stream ${{hh}}"
+                arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
+                files=$(ls ${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}* ${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc 2>/dev/null)
+                if (( ${{#files}} > 0 )); then
+                    echo "preparing ${{arch_name}} with files ${{files}}"
+                    tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
+                    echo "sending ${{arch_name}} to archive directory"
+                    rsync -avr ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
+                fi
             done
         fi
     done
     shift 3
-done'''.format(ext=tar_ext, opt=tar_opt)
+done'''.format(ext=tar_ext, opt=tar_opt, rm=tar_rm)
 
         # Write script to file
         with open(os.path.join(self.path, self._archive_job), mode='w') as script:
