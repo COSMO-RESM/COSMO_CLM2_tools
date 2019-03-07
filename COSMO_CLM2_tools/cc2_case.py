@@ -979,21 +979,21 @@ while (( ${{#}} > 0 )); do
     m1="$2"
     m2="$3"
     for ((m=m1; m<=m2; m++)); do
-        echo "treating month ${{m}}"
+        echo "    treating month ${{m}}"
         # Handle COSMO output
         YYYYMM=${{YYYY}}$(printf "%02d" ${{m}})
         YYYYMMp1=$((YYYY + m/12))$(printf "%02d" $((m%12+1)))
         if ((${{#COSMO_gribouts[@]}} > 0)); then
             for gribout in ${{COSMO_gribouts[@]}}; do
-                echo "handling COSMO stream ${{gribout}}"
+                echo "        handling COSMO stream ${{gribout}}"
                 cd ${{gribout}}
                 arch_name=lffd${{YYYYMM}}.{ext:s}
                 files=$(ls lffd${{YYYYMM}}* lffd${{YYYYMMp1}}0100* 2>/dev/null)
-                if (( ${{#files}} > 0 )); then
-                    echo "preparing ${{arch_name}} with files ${{files}}"
-                    tar -{opt:s} ${{arch_name}} ${{files}} --exclude *c.nc --exclude *c {rm:s}
+                if (( ${{#files}} > 0 )); sthen
+                    echo "        preparing ${{arch_name}}"
+                    tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
                     mkdir -p ${{archive_dir}}/${{gribout}}
-                    echo "sending ${{arch_name}} to archive directory"
+                    echo "        sending ${{arch_name}} to archive directory"
                     rsync -avr ${{arch_name}} ${{archive_dir}}/${{gribout}}/ --remove-source-files
                 fi
                 cd -
@@ -1004,13 +1004,13 @@ while (( ${{#}} > 0 )); do
         YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
         if ((${{#CESM_hh[@]}} > 0)); then
             for hh in ${{CESM_hh[@]}}; do
-                echo "handling CESM stream ${{hh}}"
+                echo "        handling CESM stream ${{hh}}"
                 arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
                 files=$(ls ${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}* ${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc 2>/dev/null)
                 if (( ${{#files}} > 0 )); then
-                    echo "preparing ${{arch_name}} with files ${{files}}"
+                    echo "        preparing ${{arch_name}}"
                     tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
-                    echo "sending ${{arch_name}} to archive directory"
+                    echo "        sending ${{arch_name}} to archive directory"
                     rsync -avr ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
                 fi
             done
@@ -1043,52 +1043,57 @@ done'''.format(ext=tar_ext, opt=tar_opt, rm=tar_rm)
         def _submit_archive_chunck(start_date, end_date):
 
             cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {args:s}'
+            # In case the chunck doesn't start the first day of a month at 00:00
+            cur_start_date = datetime(start_date.year, start_date.month, 1)
 
             if self.archive_per_month:
-                cur_start_date = start_date
                 while cur_start_date < end_date:
-                    # Compute current end date
-                    # (all this in case the chunck doesn't start the first day of the month at 00:00)
-                    cur_end_date = add_time_from_str(datetime(cur_start_date.year, cur_start_date.month, 1), '1m')
+                    # Compute end date of the period
+                    cur_end_date = min(datetime(add_time_from_str(cur_start_date, '1m'), end_date))
+
+                    if cur_end_date >= add_time_from_str(cur_start_date, '1m') or cur_end_date >= self.end_date:
+                        # Build arguments list for archive job (years and months)
+                        args_list = [str(cur_start_date.year), str(cur_start_date.month), str(cur_start_date.month)]
+
+                        # Build logfile name
+                        d1_str = cur_start_date.strftime(date_fmt['cesm'])
+                        d2_str = cur_end_date.strftime(date_fmt['cesm'])
+                        logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
+
+                        # Assemble full command and submit
+                        cmd = cmd_tmpl.format(job=self._archive_job, args=' '.join(args_list), log=logfile)
+                        print('submitting archive with check_call(' + cmd + ', shell=True)')
+                        check_call(cmd, shell=True)
+
+                    # Shift dates
+                    cur_start_date = cur_end_date
+            else:
+                # Build arguments list for archive job (years and months)
+                args_list = []
+                while cur_start_date < end_date:
+                    # Compute end date of the period
+                    cur_end_date = min(datetime(cur_start_date.year+1, 1, 1), end_date)
 
                     # Build arguments list for archive job (years and months)
-                    args_list = [str(cur_start_date.year), str(cur_start_date.month), str(cur_start_date.month)]
+                    if cur_end_date >= add_time_from_str(cur_start_date, '1m') or cur_end_date >= self.end_date:
+                        args_list += ['{:d}'.format(cur_start_date.year)]
+                        m1 = '{:d}'.format(cur_start_date.month)
+                        m2 = '{:d}'.format((end_date.month-2)%12+1)
+                        args_list += [m1, m2]
+                    cur_start_date = cur_end_date
 
+                if len(args_list) >= 3:
                     # Build logfile name
-                    d1_str = cur_start_date.strftime(date_fmt['cesm'])
-                    d2_str = cur_end_date.strftime(date_fmt['cesm'])
+                    d1_str = start_date.strftime(date_fmt['cesm'])
+                    d2_str = end_date.strftime(date_fmt['cesm'])
                     logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
 
                     # Assemble full command and submit
                     cmd = cmd_tmpl.format(job=self._archive_job, args=' '.join(args_list), log=logfile)
                     print('submitting archive with check_call(' + cmd + ', shell=True)')
                     check_call(cmd, shell=True)
-
-                    # Shift current start date
-                    cur_start_date = cur_end_date
-            else:
-                # Build arguments list for archive job (years and months)
-                args_list = []
-                start_year_date = start_date
-                while start_year_date < end_date:
-                    args_list += ['{:d}'.format(start_year_date.year)]
-                    end_year_date = datetime(start_year_date.year+1, 1, 1)
-                    if end_date >= end_year_date:
-                        args_list += ['{:d}'.format(start_year_date.month), '12']
-                        start_year_date = end_year_date
-                    else:
-                        args_list += ['{:d}'.format(d.month) for d in (start_year_date, end_date)]
-                        start_year_date = end_date
-
-                # Build logfile name
-                d1_str = start_date.strftime(date_fmt['cesm'])
-                d2_str = end_date.strftime(date_fmt['cesm'])
-                logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
-
-                # Assemble full command and submit
-                cmd = cmd_tmpl.format(job=self._archive_job, args=' '.join(args_list), log=logfile)
-                print('submitting archive with check_call(' + cmd + ', shell=True)')
-                check_call(cmd, shell=True)
+                else:
+                    print("submitting no archive job: time period too small")
 
         # Archive previous chunck
         if self.prev_run_start_date is not None and self._run_start_date > self.start_date:
