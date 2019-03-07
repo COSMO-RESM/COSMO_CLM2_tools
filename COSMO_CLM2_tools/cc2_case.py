@@ -961,13 +961,13 @@ class daint_case(cc2_case):
         tar_rm = '--remove-files' if self.archive_rm else ''
         if self.archive_compression == 'none':
             tar_ext = 'tar'
-            tar_opt = 'cvf'
+            tar_opt = 'cf'
         elif self.archive_compression == 'gzip':
             tar_ext = 'tgz'
-            tar_opt = 'zcvf'
+            tar_opt = 'zcf'
         elif self.archive_compression == 'bzip2':
             tar_ext = 'tbz'
-            tar_opt = 'jcvf'
+            tar_opt = 'jcf'
 
         script_str += '''
 mkdir -p ${{archive_dir}}
@@ -989,7 +989,7 @@ while (( ${{#}} > 0 )); do
                 cd ${{gribout}}
                 arch_name=lffd${{YYYYMM}}.{ext:s}
                 files=$(ls lffd${{YYYYMM}}* lffd${{YYYYMMp1}}0100* 2>/dev/null)
-                if (( ${{#files}} > 0 )); sthen
+                if (( ${{#files}} > 0 )); then
                     echo "        preparing ${{arch_name}}"
                     tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
                     mkdir -p ${{archive_dir}}/${{gribout}}
