@@ -289,7 +289,8 @@ class cc2_case(object):
         if self.transfer_by_chunck and self._run_end_date < self.end_date:
             self.build_transfer_list(self.start_date, self._run_end_date, initial=True)
         else:
-            self.build_transfer_list(self.start_date, self.end_date, initial=True)
+            end_date = self.end_date + timedelta(days=1) if self.dummy_day else self.end_date
+            self.build_transfer_list(self.start_date, end_date, initial=True)
         self.transfer_input()
         os.remove('transfer_list')
 
@@ -992,21 +993,21 @@ for ((YYYY=YS; YYYY<=YE; YYYY++)); do
             done
         fi
         # Handle CESM output
-        if ((${{#CESM_hh[@]}} > 0)); then
-            YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
-            YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
-            echo "        handling CESM stream ${{hh}}"
-            for hh in ${{CESM_hh[@]}}; do
-                arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
-                files=$(find . \( \( -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -and -not -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}-01-00000.nc" \) -or -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc" \) -printf '%f\\n' | sort)
-                if (( ${{#files}} > 0 )); then
-                    echo "            preparing ${{arch_name}}"
-                    tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
-                    echo "            sending ${{arch_name}} to archive directory"
-                    rsync -ar ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
-                fi
-            done
-        fi
+        # if ((${{#CESM_hh[@]}} > 0)); then
+        #     YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
+        #     YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
+        #     echo "        handling CESM stream ${{hh}}"
+        #     for hh in ${{CESM_hh[@]}}; do
+        #         arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
+        #         files=$(find . \( \( -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -and -not -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}-01-00000.nc" \) -or -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc" \) -printf '%f\\n' | sort)
+        #         if (( ${{#files}} > 0 )); then
+        #             echo "            preparing ${{arch_name}}"
+        #             tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
+        #             echo "            sending ${{arch_name}} to archive directory"
+        #             rsync -ar ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
+        #         fi
+        #     done
+        # fi
     done
 done'''.format(ext=tar_ext, opt=tar_opt, rm=tar_rm)
 
