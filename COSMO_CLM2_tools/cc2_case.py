@@ -977,11 +977,11 @@ for ((YYYY=YS; YYYY<=YE; YYYY++)); do
         YYYYMMp1=$((YYYY + m/12))$(printf "%02d" $((m%12+1)))
         if ((${{#COSMO_gribouts[@]}} > 0)); then
             for gribout in ${{COSMO_gribouts[@]}}; do
-                echo "        handling COSMO stream ${{gribout}}"
                 cd ${{gribout}}
                 arch_name=lffd${{YYYYMM}}.{ext:s}
                 files=$(find . \( \( -name "lffd${{YYYYMM}}"'*' -and -not -name "lffd${{YYYYMM}}0100"'*' \) -or -name "lffd${{YYYYMMp1}}0100"'*' \) -printf '%f\\n' | sort)
                 if (( ${{#files}} > 0 )); then
+                    echo "        handling COSMO stream ${{gribout}}"
                     echo "        preparing ${{arch_name}}"
                     tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
                     mkdir -p ${{archive_dir}}/${{gribout}}
@@ -996,10 +996,10 @@ for ((YYYY=YS; YYYY<=YE; YYYY++)); do
         YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
         if ((${{#CESM_hh[@]}} > 0)); then
             for hh in ${{CESM_hh[@]}}; do
-                echo "        handling CESM stream ${{hh}}"
                 arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
                 files=$(find . \( \( -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -and -not -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}-01-00000.nc" \) -or -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc" \) -printf '%f\\n' | sort)
                 if (( ${{#files}} > 0 )); then
+                    echo "        handling CESM stream ${{hh}}"
                     echo "        preparing ${{arch_name}}"
                     tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
                     echo "        sending ${{arch_name}} to archive directory"
@@ -1066,15 +1066,20 @@ done'''.format(ext=tar_ext, opt=tar_opt, rm=tar_rm)
             # Determine dates for archive job
             if end_archive_date >= self.end_date:
                 d1_str = "{:d}{:02d}".format(start_archive_date.year, start_archive_date.month)
-                d2_str = "{:d}{:02d}".format(end_archive_date.year, end_archive_date.month)
+                d2 = datetime(end_archive_date.year, end_archive_date.month, 1)
+                if end_archive_date > d2:
+                    d2_str = "{:d}{:02d}".format(d2.year, d2.month)
+                else:
+                    d2 = add_time_from_str(end_archive_date, '-1m')
+                    d2_str = "{:d}{:02d}".format(d2.year, d2.month)
                 proceed = True
             else:
                 start_date_p1m = add_time_from_str(start_archive_date, '1m')
                 first_month_end = datetime(start_date_p1m.year, start_date_p1m.month, 1)
                 if first_month_end <= end_archive_date:
                     d1_str = "{:d}{:02d}".format(start_archive_date.year, start_archive_date.month)
-                    end_date_m1m = add_time_from_str(end_archive_date, '-1m')
-                    d2_str = "{:d}{:02d}".format(end_date_m1m.year, end_date_m1m.month)
+                    d2 = add_time_from_str(end_archive_date, '-1m')
+                    d2_str = "{:d}{:02d}".format(d2.year, d2.month)
                     proceed = True
             if proceed:
                 # Submit archive job
