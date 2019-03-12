@@ -1212,36 +1212,36 @@ Tools for automated creation and run of COSMO_CLM2 simulations
           for ((m=m1; m<=m2; m++)); do
               echo "    treating month ${{m}}"
               # Handle COSMO output
-              YYYYMM=${{YYYY}}$(printf "%02d" ${{m}})
-              YYYYMMp1=$((YYYY + m/12))$(printf "%02d" $((m%12+1)))
               if ((${{#COSMO_gribouts[@]}} > 0)); then
+                  YYYYMM=${{YYYY}}$(printf "%02d" ${{m}})
+                  YYYYMMp1=$((YYYY + m/12))$(printf "%02d" $((m%12+1)))
+                  echo "        handling COSMO stream ${{gribout}}"
                   for gribout in ${{COSMO_gribouts[@]}}; do
                       cd ${{gribout}}
                       arch_name=lffd${{YYYYMM}}.{ext:s}
                       files=$(find . \( \( -name "lffd${{YYYYMM}}"'*' -and -not -name "lffd${{YYYYMM}}0100"'*' \) -or -name "lffd${{YYYYMMp1}}0100"'*' \) -printf '%f\\n' | sort)
                       if (( ${{#files}} > 0 )); then
-                          echo "        handling COSMO stream ${{gribout}}"
-                          echo "        preparing ${{arch_name}}"
+                          echo "            preparing ${{arch_name}}"
                           tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
                           mkdir -p ${{archive_dir}}/${{gribout}}
-                          echo "        sending ${{arch_name}} to archive directory"
+                          echo "            sending ${{arch_name}} to archive directory"
                           rsync -ar ${{arch_name}} ${{archive_dir}}/${{gribout}}/ --remove-source-files
                       fi
                       cd - > /dev/null
                   done
               fi
               # Handle CESM output
-              YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
-              YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
               if ((${{#CESM_hh[@]}} > 0)); then
+                  YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
+                  YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
+                  echo "        handling CESM stream ${{hh}}"
                   for hh in ${{CESM_hh[@]}}; do
                       arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
                       files=$(find . \( \( -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -and -not -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}-01-00000.nc" \) -or -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc" \) -printf '%f\\n' | sort)
                       if (( ${{#files}} > 0 )); then
-                          echo "        handling CESM stream ${{hh}}"
-                          echo "        preparing ${{arch_name}}"
+                          echo "            preparing ${{arch_name}}"
                           tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
-                          echo "        sending ${{arch_name}} to archive directory"
+                          echo "            sending ${{arch_name}} to archive directory"
                           rsync -ar ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
                       fi
                   done
