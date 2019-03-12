@@ -66,10 +66,6 @@ def create_case():
     main_group.add_argument('--archive_rm', action=cc2_act('main'), type=str_to_bool,
                             help="remove original output files from the case directory when archiving\n"\
                             "(type: bool, using anything Python can parse as a boolean, default: False)")
-    main_group.add_argument('--cosmo_only', action=cc2_act('main'), type=str_to_bool,
-                            help="run only cosmo with build-in soil model TERRA\n"\
-                            "(type: bool, using anything Python can parse as a boolean, default: False)\n"\
-                            "Be carefull to provide a COSMO executable compiled accordingly")
     main_group.add_argument('--start_date', metavar='DATE_1', action=cc2_act('main'),
                             help="simulation start date formatted as YYYY-MM-DD-HH")
     main_group.add_argument('--end_date', metavar='DATE_2', action=cc2_act('main'),
@@ -108,6 +104,10 @@ def create_case():
     main_group.add_argument('--ncesm', action=cc2_act('main'), type=int,
                             help="number of subdomains for CESM domain decomposition'\n"\
                             "(type: int, default: from drv_in namelist)")
+    main_group.add_argument('--cosmo_only', action=cc2_act('main'), type=str_to_bool,
+                            help="run only cosmo with build-in soil model TERRA\n"\
+                            "(type: bool, using anything Python can parse as a boolean, default: False)\n"\
+                            "Be carefull to provide a COSMO executable compiled accordingly")
     main_group.add_argument('--gpu_mode', action=cc2_act('main'), type=str_to_bool,
                             help="run COSMO on gpu (type: bool, using anything Python can parse as a boolean,\n"\
                             "default: False)")
