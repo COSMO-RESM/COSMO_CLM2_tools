@@ -55,7 +55,7 @@ def create_case():
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
     parser.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
     parser.add_argument('--machine', metavar='MACH',
-                        help="machine on which the case is running (default: has to be given \n"\
+                        help="machine on which the case is running (default: has to be given \n"
                         "either by the command line or the xml setup file)")
     main_group = parser.add_argument_group('main', 'Case options common to all machines')
     main_group.add_argument('--name', action=cc2_act('main'), help="case name (default: COSMO_CLM2)")
@@ -64,17 +64,17 @@ def create_case():
     main_group.add_argument('--archive_dir', action=cc2_act('main'),
                             help="directory where output and restart files are archived (default: None)")
     main_group.add_argument('--archive_rm', action=cc2_act('main'), type=str_to_bool,
-                            help="remove original output files from the case directory when archiving\n"\
+                            help="remove original output files from the case directory when archiving\n"
                             "(type: bool, using anything Python can parse as a boolean, default: False)")
     main_group.add_argument('--start_date', metavar='DATE_1', action=cc2_act('main'),
                             help="simulation start date formatted as YYYY-MM-DD-HH")
     main_group.add_argument('--end_date', metavar='DATE_2', action=cc2_act('main'),
                             help="simulation end date formatted as YYYY-MM-DD-HH")
     main_group.add_argument('--run_length', metavar='dt', action=cc2_act('main'),
-                            help="sets simulation length if end_date not specified or run length\n"\
-                            "between restarts otherwise\n"\
-                            "dt is of the form 'N1yN2m', 'N1y', 'N2m' or 'N3d'\n"\
-                            "N1, N2 and N4 being arbitrary integers (N2>12 possible) and\n"\
+                            help="sets simulation length if end_date not specified or run length\n"
+                            "between restarts otherwise\n"
+                            "dt is of the form 'N1yN2m', 'N1y', 'N2m' or 'N3d'\n"
+                            "N1, N2 and N4 being arbitrary integers (N2>12 possible) and\n"
                             "'y', 'm' and 'd' standing for years, months and days")
     main_group.add_argument('--cos_in', action=cc2_act('main'),
                             help="COSMO input files directory (default: ./COSMO_input)")
@@ -93,35 +93,35 @@ def create_case():
     main_group.add_argument('--oas_nml', action=cc2_act('main'),
                             help="OASIS namelists directory (default: ./OASIS_nml)")
     main_group.add_argument('--ncosx', action=cc2_act('main'), type=int,
-                            help="number of subdomains along the 'x-axis'\n"\
+                            help="number of subdomains along the 'x-axis'\n"
                             "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
     main_group.add_argument('--ncosy', action=cc2_act('main'), type=int,
-                            help="number of subdomains along the 'y-axis'\n"\
+                            help="number of subdomains along the 'y-axis'\n"
                             "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
     main_group.add_argument('--ncosio', action=cc2_act('main'), type=int,
-                            help="number of cores dedicated to i/o work'\n"\
+                            help="number of cores dedicated to i/o work'\n"
                             "(type: int, default: from INPUT_ORG namelist)")
     main_group.add_argument('--ncesm', action=cc2_act('main'), type=int,
-                            help="number of subdomains for CESM domain decomposition'\n"\
+                            help="number of subdomains for CESM domain decomposition'\n"
                             "(type: int, default: from drv_in namelist)")
     main_group.add_argument('--cosmo_only', action=cc2_act('main'), type=str_to_bool,
-                            help="run only cosmo with build-in soil model TERRA\n"\
-                            "(type: bool, using anything Python can parse as a boolean, default: False)\n"\
+                            help="run only cosmo with build-in soil model TERRA\n"
+                            "(type: bool, using anything Python can parse as a boolean, default: False)\n"
                             "Be carefull to provide a COSMO executable compiled accordingly")
     main_group.add_argument('--gpu_mode', action=cc2_act('main'), type=str_to_bool,
-                            help="run COSMO on gpu (type: bool, using anything Python can parse as a boolean,\n"\
+                            help="run COSMO on gpu (type: bool, using anything Python can parse as a boolean,\n"
                             "default: False)")
     main_group.add_argument('--dummy_day', action=cc2_act('main'), type=str_to_bool,
-                            help="perform a dummy day run after end of simulation to get last COSMO output.\n"\
+                            help="perform a dummy day run after end of simulation to get last COSMO output.\n"
                             "(type: bool, using anything Python can parse as a boolean, default: True)")
     main_group.add_argument('--input_type', action=cc2_act('main'), choices=['file', 'symlink'],
                             help="default: file")
     main_group.add_argument('--transfer_all', action=cc2_act('main'), type=str_to_bool,
-                            help="Transfer all model input files at once before starting the simulation\n"\
+                            help="Transfer all model input files at once before starting the simulation\n"
                             "(type: bool, using anything Python can parse as a boolean, default: True)")
     # Times are added to daint and mistral groups explicitly, not main, in order to allow for different defaults
     main_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
-                            help="reserved time on compute nodes\n"\
+                            help="reserved time on compute nodes\n"
                             "(default: '24:00:00' on daint, '08:00:00' on mistral)")
     main_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
                             help="reserved time for transfer job (default: '02:00:00')")
@@ -131,7 +131,7 @@ def create_case():
     slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager.\n'\
                                             '(common to all machines using the slurm scheduler)')
     slurm_group.add_argument('--account', action=cc2_act('daint', 'mistral'),
-                             help="account to use for batch script\n"\
+                             help="account to use for batch script\n"
                              "(default: infered from $PROJECT on daint, None on mistral)")
     slurm_group.add_argument('--partition', action=cc2_act('daint', 'mistral'),
                              help="select a queue (default: None)")
@@ -148,14 +148,17 @@ def create_case():
                              "(type: bool, using anything Python can parse as a boolean, default: False)")
     daint_group.add_argument('--archive_compression', action=cc2_act('daint'), choices=['none', 'gzip', 'bzip2'],
                              help="select the compression algorithm (default: 'gzip')")
+    daint_group.add_argument('--archive_cesm', action=cc2_act('daint'), type=str_to_bool,
+                             help="archive cesm output or not\n"
+                             "(type: bool, using anything Python can parse as a boolean, default: True)")
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
-                                help="do not submit job after setup\n"\
+                                help="do not submit job after setup\n"
                                 "only command line argument, cannot be set in xml file")
     cmd_line_group.add_argument('--gen_oasis', action='store_true',
-                                help="generate OASIS auxiliary files\n"\
-                                "note that OASIS will crash after producing the files\n"\
+                                help="generate OASIS auxiliary files\n"
+                                "note that OASIS will crash after producing the files\n"
                                 "only command line argument, cannot be set in xml file\n")
 
     opts = parser.parse_args()

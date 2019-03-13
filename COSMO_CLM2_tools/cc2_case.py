@@ -739,13 +739,14 @@ class daint_case(cc2_case):
     def __init__(self, run_time='24:00:00', account=None, partition=None,
                  shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
                  transfer_time='02:00:00', archive_time='03:00:00', archive_per_month=False,
-                 archive_compression='gzip', **base_case_args):
+                 archive_compression='gzip', archive_cesm=True, **base_case_args):
 
         self.run_time = run_time
         self.transfer_time = transfer_time
         self.archive_time = archive_time
         self.archive_per_month = archive_per_month
         self.archive_compression = archive_compression
+        self.archive_cesm = archive_cesm
         self.account = account
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version
@@ -936,6 +937,7 @@ class daint_case(cc2_case):
         # Case dependent environment variables
         script_str += 'CASE_NAME={:s}\n'.format(self.name)
         script_str += 'archive_dir={:s}\n'.format(os.path.join(self.archive_dir, self.name))
+        script_str += 'archive_cesm={:s}\n'.format('true' if self.archive_cesm else 'false')
         # COSMO output streams
         stream_list = ['"{:s}"'.format(os.path.normpath(gribout['ydir'])) for gribout in self._get_gribouts()]
         script_str += 'COSMO_gribouts=({:s})\n'.format(' '.join(stream_list))
@@ -992,22 +994,22 @@ for ((YYYY=YS; YYYY<=YE; YYYY++)); do
                 cd - > /dev/null
             done
         fi
-        # Handle CESM output
-        # if ((${{#CESM_hh[@]}} > 0)); then
-        #     YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
-        #     YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
-        #     echo "        handling CESM stream ${{hh}}"
-        #     for hh in ${{CESM_hh[@]}}; do
-        #         arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
-        #         files=$(find . \( \( -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -and -not -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}-01-00000.nc" \) -or -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc" \) -printf '%f\\n' | sort)
-        #         if (( ${{#files}} > 0 )); then
-        #             echo "            preparing ${{arch_name}}"
-        #             tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
-        #             echo "            sending ${{arch_name}} to archive directory"
-        #             rsync -ar ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
-        #         fi
-        #     done
-        # fi
+        Handle CESM output
+        if [[ ${{#CESM_hh[@]}} > 0 && ${{archive_cesm}} == "true" ]]; then
+            YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
+            YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
+            echo "        handling CESM stream ${{hh}}"
+            for hh in ${{CESM_hh[@]}}; do
+                arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
+                files=$(find . \( \( -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -and -not -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}-01-00000.nc" \) -or -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc" \) -printf '%f\\n' | sort)
+                if (( ${{#files}} > 0 )); then
+                    echo "            preparing ${{arch_name}}"
+                    tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
+                    echo "            sending ${{arch_name}} to archive directory"
+                    rsync -ar ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
+                fi
+            done
+        fi
     done
 done'''.format(ext=tar_ext, opt=tar_opt, rm=tar_rm)
 
