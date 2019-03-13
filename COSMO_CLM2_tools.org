@@ -1236,11 +1236,10 @@ Tools for automated creation and run of COSMO_CLM2 simulations
               # Handle CESM output
               if [[ ${{#CESM_hh[@]}} > 0 && ${{archive_cesm}} == "true" ]]; then
                   YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
-                  YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
                   for hh in ${{CESM_hh[@]}}; do
                       echo "        handling CESM stream ${{hh}}"
                       arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
-                      files=$(find . \( \( -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -and -not -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}-01-00000.nc" \) -or -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMMp1}}-01-00000.nc" \) -printf '%f\\n' | sort)
+                      files=$(find . -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -printf '%f\\n' | sort)
                       if (( ${{#files}} > 0 )); then
                           echo "            preparing ${{arch_name}}"
                           tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
