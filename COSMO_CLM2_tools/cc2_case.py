@@ -994,7 +994,7 @@ for ((YYYY=YS; YYYY<=YE; YYYY++)); do
                 cd - > /dev/null
             done
         fi
-        Handle CESM output
+        # Handle CESM output
         if [[ ${{#CESM_hh[@]}} > 0 && ${{archive_cesm}} == "true" ]]; then
             YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
             YYYYMMp1=$((YYYY + m/12))-$(printf "%02d" $((m%12+1)))
