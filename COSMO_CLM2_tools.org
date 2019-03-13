@@ -1,10 +1,9 @@
-#+TITLE: COSMO_CLM^2 simulation setup tools
-#+SUBTITLE: Tools for automated creation and run of COSMO_CLM2 simulations
+#+TITLE: Tools for automated creation and run of COSMO_CLM^2 simulations 
 #+AUTHOR: Matthieu Leclair
 #+EXPORT_FILE_NAME: README
 #+STARTUP: overview
 
-This tools is written in Python3, with some bash scripts for jobs
+This utility is written in Python3, with some bash scripts for jobs
 submitted to scheduling systems. It is written in a way that makes it
 extensible to different machines (so far 2 are supported: Piz Daint at
 CSCS and Mistral at DKRZ).
