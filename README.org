@@ -1,10 +1,14 @@
-# Created 2019-03-06 Wed 17:34
+# Created 2019-03-13 Wed 17:56
 #+TITLE: COSMO_CLM^2 simulation setup tools
 #+AUTHOR: Matthieu Leclair
+#+subtitle: Tools for automated creation and run of COSMO_CLM2 simulations
 #+export_file_name: README
 #+startup: overview
 
-Tools for automated creation and run of COSMO_CLM2 simulations
+This tools is written in Python3, with some bash scripts for jobs
+submitted to scheduling systems. It is written in a way that makes it
+extensible to different machines (so far 2 are supported: Piz Daint at
+CSCS and Mistral at DKRZ).
 
 * Install
 You can now install either for python 2 or 3 (python3 recommanded as
@@ -23,9 +27,10 @@ without cloning and installing manually
 - Make sure =~/.local/bin= is in your path
 
 * Usage
+** Command line help
 More comprehensive help will come. Essentially the tool provides
 the cc2_create_case command. This is the result of =cc2_create_case
-  --help=:
+   --help=:
 #+begin_src text
   usage: cc2_create_case [-h] [-s FILE] [--machine MACH] [--name NAME]
                          [--install_dir INSTALL_DIR] [--archive_dir ARCHIVE_DIR]
