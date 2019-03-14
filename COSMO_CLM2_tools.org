@@ -1,13 +1,35 @@
-#+TITLE: Tools for automated creation and run of COSMO_CLM^2 simulations 
+#+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+EXPORT_FILE_NAME: README
 #+STARTUP: overview
 
-This utility is written in Python3, with some bash scripts for jobs
-submitted to scheduling systems. It is written in a way that makes it
-extensible to different machines (so far 2 are supported: Piz Daint at
-CSCS and Mistral at DKRZ).
+* Description
+  This utility enables the automated creation and run of COSMO_CLM^2
+  simulations. It is written in Python3, with some automatically
+  generated bash scripts for interaction with scheduling systems, and
+  with a view to be extensible to different machines (so far Piz Daint
+  at CSCS and Mistral at DKRZ are supported).
 
+  The utility provides essentially one command, =cc2_create_case=,
+  which builds a case in a dedicated directory based on the user's
+  input provided either through command line arguments or an xml setup
+  file. During case creation, the following steps occur:
+  - all necessary files (input data files, executables and potentially
+    modified namelists) are transfered to the case directory or placed
+    in a subdirectory according to namelists specifications when
+    needed. Based on the user's specifications, either whole of the
+    input data or only the part needed for the first chunk of the
+    simulation (for long simulation needing restarts) is getting
+    transferred.
+  - bash job scripts are created for running, transferring input data
+    and archiving output files.
+  - case properties not stored in namelists (e.g. length of chunks,
+    archiving options, etc) are written to a local xml configuration
+    file (not ot be confused with the user's xml setup file)
+
+  Still to write:
+  - submission and synchronization of run, transfer and archive jobs
+  
 * Install
   You can now install either for python 2 or 3 (python3 recommanded as
   python2 compatibility might not be ensured in thhe future) and
@@ -149,6 +171,8 @@ CSCS and Mistral at DKRZ).
                              note that OASIS will crash after producing the files
                              only command line argument, cannot be set in xml file
    #+END_SRC
+
+* Development
 * COSMO_CLM2_tools                                                 :noexport:
   - [ ] Add doc strings
 ** example_setup.xml
