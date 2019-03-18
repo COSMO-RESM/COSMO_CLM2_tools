@@ -1232,9 +1232,9 @@
       mkdir -p ${{archive_dir}}/CESM_output
 
       YS="${{1:0:4}}"
-      MS="${{1:4:2}}"
+      MS=$(echo "${{1:4:2}}" | sed 's/^0*//')
       YE="${{2:0:4}}"
-      ME="${{2:4:2}}"
+      ME=$(echo "${{2:4:2}}" | sed 's/^0*//')
 
       for ((YYYY=YS; YYYY<=YE; YYYY++)); do
           echo "treating year ${{YYYY}}"
@@ -1300,7 +1300,8 @@
 
           def _submit_archive_cmd(self):
 
-              def _assemble_cmd_and_submit(d1_str, d2_str):
+              def _assemble_cmd_and_submit(d1, d2):
+                  d1_str, d2_str = d1.strftime('%Y%m'), d2.strftime('%Y%m')
                   cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {d1:s} {d2:s}'
                   logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
                   cmd = cmd_tmpl.format(job=self._archive_job, d1=d1_str, d2=d2_str, log=logfile)
@@ -1319,14 +1320,13 @@
                   # Submit one archive job per month
                   cur_start_date = start_archive_date
                   while cur_start_date < end_archive_date:
-                      cur_date_p1m = add_time_from_str(cur_start_date, '1m')
-                      cur_month_end = datetime(cur_date_p1m.year, cur_date_p1m.month, 1)
+                      cur_month_beg = datetime(cur_start_date.year, cur_start_date.month, 1)
+                      tmp_date = add_time_from_str(cur_start_date, '1m')
+                      cur_month_end = datetime(tmp_date.year, tmp_date.month, 1)
                       # Check that the we have to proceed to archiving for that period
                       if cur_month_end <= end_archive_date or end_archive_date >= self.end_date:
                           # Determine date for archive job and submit
-                          d_str = "{:d}{:02d}".format(cur_start_date.year, cur_start_date.month)
-                          _assemble_cmd_and_submit(d_str, d_str)
-
+                          _assemble_cmd_and_submit(cur_month_beg, cur_month_beg)
                       # Shift dates
                       cur_start_date = cur_month_end
               else:
@@ -1334,25 +1334,22 @@
                   proceed = False
                   # Determine dates for archive job
                   if end_archive_date >= self.end_date:
-                      d1_str = "{:d}{:02d}".format(start_archive_date.year, start_archive_date.month)
+                      d1 = datetime(start_archive_date.year, start_archive_date.month, 1)
                       d2 = datetime(end_archive_date.year, end_archive_date.month, 1)
-                      if end_archive_date > d2:
-                          d2_str = "{:d}{:02d}".format(d2.year, d2.month)
-                      else:
+                      if d2 == end_archive_date:
                           d2 = add_time_from_str(end_archive_date, '-1m')
-                          d2_str = "{:d}{:02d}".format(d2.year, d2.month)
                       proceed = True
                   else:
-                      start_date_p1m = add_time_from_str(start_archive_date, '1m')
-                      first_month_end = datetime(start_date_p1m.year, start_date_p1m.month, 1)
-                      if first_month_end <= end_archive_date:
-                          d1_str = "{:d}{:02d}".format(start_archive_date.year, start_archive_date.month)
-                          d2 = add_time_from_str(end_archive_date, '-1m')
-                          d2_str = "{:d}{:02d}".format(d2.year, d2.month)
+                      tmp_date = add_time_from_str(start_archive_date, '1m')
+                      first_month_end = datetime(tmp_date.year, tmp_date.month, 1)
+                      if end_archive_date >= first_month_end:
+                          d1 = datetime(start_archive_date.year, start_archive_date.month, 1)
+                          tmp_date = add_time_from_str(end_archive_date, '-1m')
+                          d2 = datetime(tmp_date.year, tmp_date.month, 1)
                           proceed = True
                   if proceed:
                       # Submit archive job
-                      _assemble_cmd_and_submit(d1_str, d2_str)
+                      _assemble_cmd_and_submit(d1, d2)
 
 
           def _run_fun(self):
