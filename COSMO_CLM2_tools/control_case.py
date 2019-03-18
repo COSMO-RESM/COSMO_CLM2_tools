@@ -2,6 +2,7 @@ from .cc2_case import factory as cc2_case_factory
 from .tools import get_xml_node_args
 from argparse import ArgumentParser, RawTextHelpFormatter
 import xml.etree.ElementTree as ET
+from time import sleep
 
 
 def control_case():
@@ -21,20 +22,22 @@ def control_case():
     cc2case = cc2_case_factory(machine, **case_args)
 
     if cfg.action == 'run':
+        cc2case.run_status = 'running'
+
         # Submit next transfer
         if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_by_chunck):
             cc2case.transfer_status = 'submitted'
             cc2case.submit_next_transfer()
 
         # Run
-        cc2case.run_status = 'running'
         cc2case.run()
         cc2case.set_next_run()
-        cc2case.run_status = 'complete'
 
         # Archive
         if cc2case.archive_dir is not None:
             cc2case.submit_archive()
+
+        cc2case.run_status = 'complete'
 
         # Submit next run
         if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):
@@ -49,5 +52,8 @@ def control_case():
 
         # Submit next run
         if cc2case.run_status == 'complete':
-            cc2case.run_status = 'submitted'
-            cc2case.submit_next_run()
+            # avoid (limit a lot) race conditions
+            sleep(10)
+            if cc2case.run_status == 'complete':
+                cc2case.run_status = 'submitted'
+                cc2case.submit_next_run()

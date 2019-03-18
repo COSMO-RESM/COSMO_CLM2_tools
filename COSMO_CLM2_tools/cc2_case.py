@@ -902,8 +902,11 @@ class daint_case(cc2_case):
 
             # Submit next run
             script.write('if [[ $(get_status "run") == "complete" ]]; then\n')
-            script.write('    set_status "run" "submitted"\n')
-            script.write('    sbatch {:s}\n'.format(self._run_job))
+            script.write('    sleep 10\n') # avoid race condition 
+            script.write('    if [[ $(get_status "run") == "complete" ]]; then\n')
+            script.write('        set_status "run" "submitted"\n')
+            script.write('        sbatch {:s}\n'.format(self._run_job))
+            script.write('    fi\n')
             script.write('fi')
 
 
