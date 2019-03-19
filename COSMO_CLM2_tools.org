@@ -1851,28 +1851,24 @@
              if cc2case.archive_dir is not None:
                  cc2case.submit_archive()
 
-             cc2case.run_status = 'complete'
-
              # Submit next run
              if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):
                  cc2case.run_status = 'submitted'
                  cc2case.submit_next_run()
+             else:
+                 cc2case.run_status = 'complete'
 
          elif cfg.action == 'transfer':
-             # Transfer
              cc2case.transfer_status = 'transferring'
+
+             # Transfer
              cc2case.transfer_input()
              cc2case.transfer_status = 'complete'
 
              # Submit next run
              if cc2case.run_status == 'complete':
-                 # avoid (limit a lot) race conditions
-                 sleep(10)
-                 if cc2case.run_status == 'complete':
-                     cc2case.run_status = 'submitted'
-                     cc2case.submit_next_run()
-
-
+                 cc2case.run_status = 'submitted'
+                 cc2case.submit_next_run()
    #+END_SRC
 ** tools.py
    - [ ] Problem with empty nodes
