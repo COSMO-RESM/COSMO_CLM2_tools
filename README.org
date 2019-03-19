@@ -1,4 +1,4 @@
-# Created 2019-03-19 Tue 15:34
+# Created 2019-03-19 Tue 15:50
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -28,8 +28,9 @@ file. During case creation, the following steps occur:
   archiving options, etc) are written to a local xml configuration
   file (not ot be confused with the user's xml setup file)
 
-Still to write:
-- submission and synchronization of run, transfer and archive jobs
+The following chart shows how the submitted run, transfer and
+archive jobs are synchronized
+
 [[submit_sync.svg]]
 
 * Install

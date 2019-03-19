@@ -27,8 +27,9 @@
     archiving options, etc) are written to a local xml configuration
     file (not ot be confused with the user's xml setup file)
 
-  Still to write:
-  - submission and synchronization of run, transfer and archive jobs
+  The following chart shows how the submitted run, transfer and
+  archive jobs are synchronized
+
   [[submit_sync.svg]]
   
 * Install
