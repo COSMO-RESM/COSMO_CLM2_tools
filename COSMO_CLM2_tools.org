@@ -81,9 +81,7 @@
    The command line help ~cc2_create_case --help~ also displays
    options following a similar structure.
 
-   #+NAME example_setup_file
-   #+CAPTION example xml setup file
-   #+BEGIN_SRC nxml
+   #+BEGIN_SRC xml
      <?xml version="1.0" encoding="utf-8"?>
      <setup>
        <machine></machine>
