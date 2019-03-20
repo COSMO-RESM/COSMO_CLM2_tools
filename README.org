@@ -1,4 +1,4 @@
-# Created 2019-03-19 Tue 15:50
+# Created 2019-03-20 Wed 17:37
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -25,12 +25,16 @@ file. During case creation, the following steps occur:
 - bash job scripts are created for running, transferring input data
   and archiving output files.
 - case properties not stored in namelists (e.g. length of chunks,
-  archiving options, etc) are written to a local xml configuration
-  file (not ot be confused with the user's xml setup file)
+  archiving options, run/transfer status etc) are written to a local
+  xml configuration file (not ot be confused with the user's xml
+  setup file)
 
-The following chart shows how the submitted run, transfer and
-archive jobs are synchronized
+The first run job is then submitted and run, transfer and archive
+jobs are subsequently organized as represented on the following
+chart.
 
+#+caption: Schematics of jobs organization
+#+name: fig:jobs_organization
 [[submit_sync.svg]]
 
 * Install
@@ -50,129 +54,104 @@ without cloning and installing manually
 - Make sure =~/.local/bin= is in your path
 
 * Usage
-** Command line help
-More comprehensive help will come. Essentially the tool provides
-the cc2_create_case command. This is the result of =cc2_create_case
-   --help=:
-#+begin_src text
-  usage: cc2_create_case [-h] [-s FILE] [--machine MACH] [--name NAME]
-                         [--install_dir INSTALL_DIR] [--archive_dir ARCHIVE_DIR]
-                         [--cosmo_only COSMO_ONLY] [--start_date DATE_1]
-                         [--end_date DATE_2] [--run_length dt] [--cos_in COS_IN]
-                         [--cos_nml COS_NML] [--cos_exe COS_EXE]
-                         [--cesm_in CESM_IN] [--cesm_nml CESM_NML]
-                         [--cesm_exe CESM_EXE] [--oas_in OAS_IN]
-                         [--oas_nml OAS_NML] [--ncosx NCOSX] [--ncosy NCOSY]
-                         [--ncosio NCOSIO] [--ncesm NCESM] [--gpu_mode GPU_MODE]
-                         [--dummy_day DUMMY_DAY] [--input_type {file,symlink}]
-                         [--transfer_all TRANSFER_ALL] [--run_time RUN_TIME]
-                         [--transfer_time TRANSFER_TIME]
-                         [--archive_time ARCHIVE_TIME] [--account ACCOUNT]
-                         [--partition PARTITION]
-                         [--modules_opt {switch,none,purge}]
-                         [--pgi_version PGI_VERSION] [--shebang SHEBANG]
-                         [--archive_per_month ARCHIVE_PER_MONTH]
-                         [--archive_compression {none,gzip,bzip2}] [--no_submit]
-                         [--gen_oasis]
+In this section we explain in more details how to use the
+utility. As mentionned in the desciption section, it mostly provides
+the ~cc2_create_case~ command to the user. ~cc2_control_case~ is
+also provided but is mostly usefull for the utility itself. Note
+that ~cc2_compile_clm~ is also provided to flexibly compile the
+Commnity Land Model. It is independant from running a COSMO_CLM^2
+simulation and is decribed later.
 
-  Set up and run a COSMO_CLM2 case
-  --------------------------------
-  Options can be set up either by xml file or the following command line arguments.
-  xml file options must be stored in a subelement of the root element tagged with 'main'.
-  and/or the specific machine (see [1]).
-  Command line arguments have precedence over xml file ones.
-  [1] https://github.com/COSMO-RESM/COSMO_CLM2_tools/blob/master/COSMO_CLM2_tools/example_setup.xml
+** How to provide user's specifications
+The first thing to describe is how users specifications are
+provided to the ~cc2_create_case~ command. Almost all options can
+be passed either by command line arguments or read from an xml
+setup file. The later is given by the ~-s, --setup_file~ option.
+The overall idea is that the user can store the most "stable"
+options in the setup file and try other options by directly
+providing them to the command line. It's anyways up to the user to
+make use of this flexibility keeping in mind that *any option
+provided through the command line has precedence over its setup
+file counterpart*. As exemplified bellow, options are grouped under
+different nodes in the xml setup file:
+- the ~machine~ node containing only the machine name. This is
+  subject to change and might eventually move to the ~main~ node
+- the ~main~ node contains machine-independent options
+- machine specific options are stored under the node named after
+  the machine
+The command line help ~cc2_create_case --help~ also displays
+options following a similar structure.
 
-  optional arguments:
-    -h, --help            show this help message and exit
-    -s FILE, --setup-file FILE
-                          xml file conatining setup options
-    --machine MACH        machine on which the case is running (default: has to be given 
-                          either by the command line or the xml setup file)
-
-  main:
-    Case options common to all machines
-
-    --name NAME           case name (default: COSMO_CLM2)
-    --install_dir INSTALL_DIR
-                          directory where the case is installed (default: $SCRATCH on daint)
-    --archive_dir ARCHIVE_DIR
-                          directory where output and restart files are archived (default: None)
-    --cosmo_only COSMO_ONLY
-                          run only cosmo with build-in soil model TERRA
-                          (type: bool, using anything Python can parse as a boolean, default: False)
-                          Be carefull to provide a COSMO executable compiled accordingly
-    --start_date DATE_1   simulation start date formatted as YYYY-MM-DD-HH
-    --end_date DATE_2     simulation end date formatted as YYYY-MM-DD-HH
-    --run_length dt       sets simulation length if end_date not specified or run length
-                          between restarts otherwise
-                          dt is of the form 'N1yN2m', 'N1y', 'N2m' or 'N3d'
-                          N1, N2 and N4 being arbitrary integers (N2>12 possible) and
-                          'y', 'm' and 'd' standing for years, months and days
-    --cos_in COS_IN       COSMO input files directory (default: ./COSMO_input)
-    --cos_nml COS_NML     COSMO namelists directory (default: ./COSMO_nml)
-    --cos_exe COS_EXE     path to COSMO executable (default: ./cosmo)
-    --cesm_in CESM_IN     CESM input files directory (default: ./CESM_input)
-    --cesm_nml CESM_NML   CESM namelists directory (default: ./CESM_nml)
-    --cesm_exe CESM_EXE   CESM executable (default: ./cesm.exe)
-    --oas_in OAS_IN       OASIS input files directory (default: ./OASIS_input)
-    --oas_nml OAS_NML     OASIS namelists directory (default: ./OASIS_nml)
-    --ncosx NCOSX         number of subdomains along the 'x-axis'
-                          for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
-    --ncosy NCOSY         number of subdomains along the 'y-axis'
-                          for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)
-    --ncosio NCOSIO       number of cores dedicated to i/o work'
-                          (type: int, default: from INPUT_ORG namelist)
-    --ncesm NCESM         number of subdomains for CESM domain decomposition'
-                          (type: int, default: from drv_in namelist)
-    --gpu_mode GPU_MODE   run COSMO on gpu (type: bool, using anything Python can parse as a boolean,
-                          default: False)
-    --dummy_day DUMMY_DAY
-                          perform a dummy day run after end of simulation to get last COSMO output.
-                          (type: bool, using anything Python can parse as a boolean, default: True)
-    --input_type {file,symlink}
-                          default: file
-    --transfer_all TRANSFER_ALL
-                          Transfer all model input files at once before starting the simulation
-                          (type: bool, using anything Python can parse as a boolean, default: True)
-    --run_time RUN_TIME   reserved time on compute nodes
-                          (default: '24:00:00' on daint, '08:00:00' on mistral)
-    --transfer_time TRANSFER_TIME
-                          reserved time for transfer job (default: '02:00:00')
-    --archive_time ARCHIVE_TIME
-                          reserved time for archive job (default: '03:00:00')
-
-  slurm:
-    Options specific to the slurm workload manager.
-    (common to all machines using the slurm scheduler)
-
-    --account ACCOUNT     account to use for batch script
-                          (default: infered from $PROJECT on daint, None on mistral)
-    --partition PARTITION
-                          select a queue (default: None)
-
-  daint:
-    Options specific to the Piz Daint machine
-
-    --modules_opt {switch,none,purge}
-                          option for loading modules at run time (default: switch)
-    --pgi_version PGI_VERSION
-                          specify pgi compiler version at run time (default: None)
-    --shebang SHEBANG     submit script shebang (default: #!/bin/bash)
-    --archive_per_month ARCHIVE_PER_MONTH
-                          submit one archiving job per month. For massive output simulations.
-                          (type: bool, using anything Python can parse as a boolean, default: False)
-    --archive_compression {none,gzip,bzip2}
-                          select the compression algorithm (default: 'gzip')
-
-  cmd line:
-    Options only avialble to the command line (no xml)
-
-    --no_submit           do not submit job after setup
-                          only command line argument, cannot be set in xml file
-    --gen_oasis           generate OASIS auxiliary files
-                          note that OASIS will crash after producing the files
-                          only command line argument, cannot be set in xml file
+#+NAME example_setup_file
+#+CAPTION example xml setup file
+#+begin_src nxml
+  <?xml version="1.0" encoding="utf-8"?>
+  <setup>
+    <machine></machine>
+    <main>
+      <name>COSMO_CLM2</name>
+      <install_dir></install_dir>
+      <archive_dir></archive_dir>
+      <cosmo_only></cosmo_only>
+      <start_date></start_date>
+      <end_date></end_date>
+      <run_length></run_length>
+      <cos_in>./COSMO_input</cos_in>
+      <cos_nml>./COSMO_nml</cos_nml>
+      <cos_exe>./cosmo</cos_exe>
+      <cesm_in>./CESM_input</cesm_in>
+      <cesm_nml>./CESM_nml</cesm_nml>
+      <cesm_exe>./cesm.exe</cesm_exe>
+      <oas_in>./OASIS_input</oas_in>
+      <oas_nml>./OASIS_nml</oas_nml>
+      <ncosx type="int"></ncosx>
+      <ncosy type="int"></ncosy>
+      <ncosio type="int"></ncosio>
+      <ncesm type="int"></ncesm>
+      <gpu_mode type="py_eval">False</gpu_mode>
+      <dummy_day type="py_eval">False</dummy_day>
+      <transfer_all type="py_eval">False</transfer_all>
+      <input_type>file</input_type>
+    </main>
+    <daint>
+      <account></account>
+      <partition></partition>
+      <modules_opt>switch</modules_opt>
+      <pgi_version></pgi_version>
+      <shebang>#!/bin/bash</shebang>
+      <run_time>24:00:00</run_time>
+      <transfer_time>02:00:00</transfer_time>
+      <archive_time>03:00:00</archive_time>
+    </daint>
+    <mistral>
+      <account></account>
+      <partition></partition>
+      <run_time>10:00:00</run_time>
+    </mistral>
+  </setup>
 #+end_src
+
+** Basic options
+- =-s, --setup_file= path to the xml setup file. Beware that all
+  relative paths provided in the setup file or directly to the
+  command line are relative to where the ~cc2_create_case~ command
+  gets executed.
+- =machine= specify the machine name. It has to be given either by
+  the command line or the in the setup file, i.e. there's no
+  default value
+
+** Case dates and restarts
+
+** Case input : data, namelists and executables
+
+** Transfer of input data during simulation
+
+** Archiving
+
+** Other machine-independent options
+
+** Daint specific options
+
+** Mistral specific options
 
 * Development

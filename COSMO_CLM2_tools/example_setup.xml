@@ -2,7 +2,7 @@
 <setup>
   <!-- main and machine specific options can also be set through the command line.
        Command line takes precedence -->
-  <machine></machine>>
+  <machine></machine>
   <main>
     <name>COSMO_CLM2</name>
     <install_dir></install_dir>
