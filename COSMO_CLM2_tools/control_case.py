@@ -22,6 +22,8 @@ def control_case():
     cc2case = cc2_case_factory(machine, **case_args)
 
     if cfg.action == 'run':
+
+        # set run status
         cc2case.run_status = 'running'
 
         # Submit next transfer
@@ -37,7 +39,7 @@ def control_case():
         if cc2case.archive_dir is not None:
             cc2case.submit_archive()
 
-        # Submit next run
+        # Submit next run and set run status
         if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):
             cc2case.run_status = 'submitted'
             cc2case.submit_next_run()
@@ -45,13 +47,17 @@ def control_case():
             cc2case.run_status = 'complete'
 
     elif cfg.action == 'transfer':
+
+        # set transfer status
         cc2case.transfer_status = 'transferring'
 
         # Transfer
         cc2case.transfer_input()
-        cc2case.transfer_status = 'complete'
 
         # Submit next run
         if cc2case.run_status == 'complete':
             cc2case.run_status = 'submitted'
             cc2case.submit_next_run()
+
+        # set transfer status
+        cc2case.transfer_status = 'complete'

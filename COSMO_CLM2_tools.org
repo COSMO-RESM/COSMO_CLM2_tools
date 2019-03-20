@@ -1163,11 +1163,12 @@
                   script.write("    sed -i 's@\(\s*<'$1'_status>\).*\(</'$1'_status>\)@\\1'$2'\\2@' {:s}\n".format(self._xml_config))
                   script.write('}\n\n')
 
+                  # Set transfer status
+                  script.write('set_status "transfer" "transferring"\n\n')
+            
                   # Transfer
-                  script.write('set_status "transfer" "transferring"\n')
                   line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
-                  script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n'))
-                  script.write('set_status "transfer" "complete"\n\n')
+                  script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n\n'))
 
                   # Submit next run
                   script.write('if [[ $(get_status "run") == "complete" ]]; then\n')
@@ -1176,7 +1177,10 @@
                   script.write('        set_status "run" "submitted"\n')
                   script.write('        sbatch {:s}\n'.format(self._run_job))
                   script.write('    fi\n')
-                  script.write('fi')
+                  script.write('fi\n\n')
+
+                  # Set transfer status            
+                  script.write('set_status "transfer" "complete"')
 
 
           def _update_transfer_job(self, d1, d2):
@@ -1838,6 +1842,8 @@
          cc2case = cc2_case_factory(machine, **case_args)
 
          if cfg.action == 'run':
+        
+             # set run status
              cc2case.run_status = 'running'
 
              # Submit next transfer
@@ -1853,7 +1859,7 @@
              if cc2case.archive_dir is not None:
                  cc2case.submit_archive()
 
-             # Submit next run
+             # Submit next run and set run status
              if (cc2case._run_end_date < cc2case.end_date and cc2case.transfer_status == 'complete'):
                  cc2case.run_status = 'submitted'
                  cc2case.submit_next_run()
@@ -1861,16 +1867,20 @@
                  cc2case.run_status = 'complete'
 
          elif cfg.action == 'transfer':
+        
+             # set transfer status
              cc2case.transfer_status = 'transferring'
 
              # Transfer
              cc2case.transfer_input()
-             cc2case.transfer_status = 'complete'
 
              # Submit next run
              if cc2case.run_status == 'complete':
                  cc2case.run_status = 'submitted'
                  cc2case.submit_next_run()
+
+             # set transfer status
+             cc2case.transfer_status = 'complete'
    #+END_SRC
 ** tools.py
    - [ ] Problem with empty nodes

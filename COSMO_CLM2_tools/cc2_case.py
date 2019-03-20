@@ -894,11 +894,12 @@ class daint_case(cc2_case):
             script.write("    sed -i 's@\(\s*<'$1'_status>\).*\(</'$1'_status>\)@\\1'$2'\\2@' {:s}\n".format(self._xml_config))
             script.write('}\n\n')
 
+            # Set transfer status
+            script.write('set_status "transfer" "transferring"\n\n')
+
             # Transfer
-            script.write('set_status "transfer" "transferring"\n')
             line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
-            script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n'))
-            script.write('set_status "transfer" "complete"\n\n')
+            script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n\n'))
 
             # Submit next run
             script.write('if [[ $(get_status "run") == "complete" ]]; then\n')
@@ -907,7 +908,10 @@ class daint_case(cc2_case):
             script.write('        set_status "run" "submitted"\n')
             script.write('        sbatch {:s}\n'.format(self._run_job))
             script.write('    fi\n')
-            script.write('fi')
+            script.write('fi\n\n')
+
+            # Set transfer status            
+            script.write('set_status "transfer" "complete"')
 
 
     def _update_transfer_job(self, d1, d2):
