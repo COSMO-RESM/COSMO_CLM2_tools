@@ -1,4 +1,4 @@
-# Created 2019-03-21 Thu 18:03
+# Created 2019-03-21 Thu 18:05
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -141,7 +141,7 @@ for directly evaluating the string by python or any valid python
 type. For some options you will see "type: bool, using anything
 Python can parse as a boolean" in the command line help instead of
 an option that doesn't require an argument. So for instance you
-might have to specify ~--gpu_mode 1~ or ~--gpu_mode 'bla'~ instead
+might have to specify ~--gpu_mode 1~ or ~--gpu_mode bla~ instead
 of the more usual ~--gpu_mode~ only. This is due to the internals
 of the code and how defaults are implemented.
 

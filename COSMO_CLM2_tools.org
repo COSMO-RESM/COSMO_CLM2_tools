@@ -140,7 +140,7 @@
    type. For some options you will see "type: bool, using anything
    Python can parse as a boolean" in the command line help instead of
    an option that doesn't require an argument. So for instance you
-   might have to specify ~--gpu_mode 1~ or ~--gpu_mode 'bla'~ instead
+   might have to specify ~--gpu_mode 1~ or ~--gpu_mode bla~ instead
    of the more usual ~--gpu_mode~ only. This is due to the internals
    of the code and how defaults are implemented.
 
