@@ -99,7 +99,7 @@ def create_case():
                             help="number of subdomains along the 'y-axis'\n"
                             "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
     main_group.add_argument('--ncosio', action=cc2_act('main'), type=int,
-                            help="number of cores dedicated to i/o work'\n"
+                            help="number of cores dedicated to i/o work\n"
                             "(type: int, default: from INPUT_ORG namelist)")
     main_group.add_argument('--ncesm', action=cc2_act('main'), type=int,
                             help="number of subdomains for CESM domain decomposition'\n"
@@ -119,17 +119,16 @@ def create_case():
     main_group.add_argument('--transfer_all', action=cc2_act('main'), type=str_to_bool,
                             help="Transfer all model input files at once before starting the simulation\n"
                             "(type: bool, using anything Python can parse as a boolean, default: True)")
-    # Times are added to daint and mistral groups explicitly, not main, in order to allow for different defaults
-    main_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
-                            help="reserved time on compute nodes\n"
-                            "(default: '24:00:00' on daint, '08:00:00' on mistral)")
-    main_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
-                            help="reserved time for transfer job (default: '02:00:00')")
-    main_group.add_argument('--archive_time', action=cc2_act('daint', 'mistral'),
-                            help="reserved time for archive job (default: '03:00:00')")
 
     slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager.\n'\
                                             '(common to all machines using the slurm scheduler)')
+    slurm_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
+                            help="reserved time for run job\n"
+                            "(default: '24:00:00' on daint, '08:00:00' on mistral)")
+    slurm_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
+                            help="reserved time for transfer job (default: '02:00:00')")
+    slurm_group.add_argument('--archive_time', action=cc2_act('daint', 'mistral'),
+                            help="reserved time for archive job (default: '03:00:00')")
     slurm_group.add_argument('--account', action=cc2_act('daint', 'mistral'),
                              help="account to use for batch script\n"
                              "(default: infered from $PROJECT on daint, None on mistral)")
