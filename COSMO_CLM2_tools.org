@@ -210,6 +210,15 @@
       as a boolean, default: True). *Warning*: make sure the
       corresponding input file are available in the COSMO input
       directory.
+    - ~--gen_oasis~ generate OASIS auxiliary files. The simulation
+      will crash after generating these files. This is normal, just
+      transfer the new files back where you need. This is a command
+      line only option, cannot be set in the setup file.
+    - ~--no_submit~ do not submit job after case install. This is
+      useful for debug or check but also if one needs to modify the
+      run, transfer or archive job scripts. The case can then be
+      submitted by hand from the case directory. This is a command
+      line only option, cannot be set in the setup file.
     
 *** Transfer of input data during simulation
     - ~--transfer_all~ transfer all model input files at once before
@@ -231,11 +240,31 @@
     - ~--archive_rm~ remove original output files from the case
       directory when archiving (type: bool, using anything Python can
       parse as a boolean, default: False)
-*** Other machine-independent options
+
+*** Scheduling options
+    Options for the scheduling system
+    - ~--run_time~ reserved time for run job (default: '24:00:00' on
+      daint, '08:00:00' on mistral)
+    - ~--transfer_time~ reserved time for transfer job (default:
+      '02:00:00')
+    - ~--archive_time~ reserved time for archive job (default:
+      '03:00:00')
+
+*** SLURM options
+    Options specific to the SLURM scheduling system
+    - ~--account~ account to use for submitted job scripts (default:
+      infered from $PROJECT on daint, None on mistral)
+    - ~--partition~ queue to witch the run job gets submitted, mostly
+      useful for debug (default: None).
 
 *** Daint specific options
+    - ~--modules_opt~ option for loading modules at run time. Either
+      'switch', 'none' or 'purge' (default: switch)
+    - ~--pgi_version~ specify pgi compiler version at run time (default: None)
+    - ~--shebang~ run job script shebang (default: '#!/bin/bash')
 
 *** Mistral specific options
+    None so far
 
 * Development
   In this section we describe a bit how the utility is implemented and
