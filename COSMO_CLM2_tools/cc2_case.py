@@ -48,8 +48,9 @@ class cc2_case(object):
                  oas_in='./OASIS_input', oas_nml='./OASIS_nml', archive_dir=None,
                  start_date=None, end_date=None, run_length=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
-                 gpu_mode=False, dummy_day=True, cosmo_only=False,
-                 gen_oasis=False, input_type='file', transfer_all=True,
+                 gpu_mode=False, dummy_day=True, cosmo_only=False, gen_oasis=False,
+                 input_type='file', transfer_all=True,
+                 archive_per_month=False, archive_compression='gzip', archive_cesm=True,
                  archive_rm=False):
 
         # Basic init (no particular work required)
@@ -64,6 +65,9 @@ class cc2_case(object):
         self.input_type = input_type
         self.transfer_all = transfer_all
         self.archive_dir = None if archive_dir is None else os.path.abspath(archive_dir)
+        self.archive_per_month = archive_per_month
+        self.archive_compression = archive_compression
+        self.archive_cesm = archive_cesm
         self.archive_rm = archive_rm
         self.transfer_by_chunck = not self.transfer_all and self.input_type == 'file'
         # Create namelists dictionnary
@@ -142,6 +146,7 @@ class cc2_case(object):
         if start_date is not None:
             self._start_date = datetime.strptime(start_date, date_fmt['in'])
             self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt['cosmo'])
+            self.nml['INPUT_ORG']['runctl']['hstart'] = 0
             if not self.cosmo_only:
                 self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._start_date.strftime(date_fmt['cesm']))
         elif 'ydate_ini' in self.nml['INPUT_ORG']['runctl']:
@@ -738,15 +743,11 @@ class daint_case(cc2_case):
 
     def __init__(self, run_time='24:00:00', account=None, partition=None,
                  shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
-                 transfer_time='02:00:00', archive_time='03:00:00', archive_per_month=False,
-                 archive_compression='gzip', archive_cesm=True, **base_case_args):
+                 transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
 
         self.run_time = run_time
         self.transfer_time = transfer_time
         self.archive_time = archive_time
-        self.archive_per_month = archive_per_month
-        self.archive_compression = archive_compression
-        self.archive_cesm = archive_cesm
         self.account = account
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version
@@ -1148,10 +1149,9 @@ class mistral_case(cc2_case):
 
 
     def __init__(self, run_time='08:00:00', account=None, partition=None,
-                 transfer_time='02:00:00', **base_case_args):
+                 transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
 
         self.run_time = run_time
-        self.transfer_time = transfer_time
         self.account = account
         self.partition = partition
         cc2_case.__init__(self, **base_case_args)
@@ -1219,7 +1219,9 @@ class mistral_case(cc2_case):
 
     def _submit_run_cmd(self):
 
-        check_call(['sbatch', self._run_job])
+        cmd = 'sbatch ' + self._run_job
+        print('submitting transfer with check_call(' + cmd + ', shell=True)')
+        check_call(cmd, shell=True)
 
 
     def _run_fun(self):

@@ -38,7 +38,7 @@
   
 * Install
   You can now install either for python 2 or 3 (python3 recommanded as
-  python2 compatibility might not be ensured in thhe future) and
+  python2 compatibility might not be ensured in the future) and
   without cloning and installing manually
   - Install COSMO_CLM2_tools
     #+BEGIN_SRC shell
@@ -129,30 +129,118 @@
    The command line help ~cc2_create_case --help~ also displays
    options following a similar structure.
 
-** Basic options
-   - =-s, --setup_file= path to the xml setup file. Beware that all
-     relative paths provided in the setup file or directly to the
-     command line are relative to where the ~cc2_create_case~ command
-     gets executed.
-   - =machine= specify the machine name. It has to be given either by
-     the command line or the in the setup file, i.e. there's no
-     default value
+** User options
+   Here we describe all options in details. An option ~--option_bla~
+   in the command line has the node ~<option_bla>value</option_bla>~
+   as counterpart in the xml setup file. In the later, in case the
+   option value has to be interpreted as something else than a string,
+   the type must be provided as an attribute to the option node (see
+   example from the previous section). It can be either ~"py_eval"~
+   for directly evaluating the string by python or any valid python
+   type. For some options you will see "type: bool, using anything
+   Python can parse as a boolean" in the command line help instead of
+   an option that doesn't require an argument. So for instance you
+   might have to specify ~--gpu_mode 1~ or ~--gpu_mode 'bla'~ instead
+   of the more usual ~--gpu_mode~ only. This is due to the internals
+   of the code and how defaults are implemented.
 
-** Case dates and restarts
+*** Basic options
+    - =-s, --setup_file= path to the xml setup file. Beware that all
+      relative paths provided in the setup file or directly to the
+      command line are relative to where the ~cc2_create_case~ command
+      gets executed.
+    - =--machine= specify the machine name. It has to be given either by
+      the command line or the in the setup file, i.e. there's no
+      default value
+    - ~--name~ case name. The working directory will be named after
+      the case name. It also affects CESM output file names.
+    - ~--install_dir~ the case working directory gets created as
+      ~INSTALL_DIR/CASE_NAME~
 
-** Case input : data, namelists and executables
+*** Case dates and restarts
+    - ~--start_date~ simulation start date formatted as 'YYYY-MM-DD-HH'
+    - ~--end_date~ simulation end date formatted as 'YYYY-MM-DD-HH'
+    - ~--run_length~ set simulation length if end_date not specified
+      or run length between restarts otherwise. It can be given in one
+      of the following forms: 'N1yN2m', 'N1y', 'N2m' or 'N3d'. N1, N2
+      and N4 are arbitrary integers (N2>12 possible) and 'y', 'm' and
+      'd' stand respectively for years, months and days.
 
-** Transfer of input data during simulation
+*** Case input : data, namelists and executables
+    So far the following options have default values but these
+    defaults might disappear in favor of an error thrown in case none
+    of the setup file or the command line arguments contain it.
+    - ~--cos_in~ COSMO input files directory (default: ./COSMO_input)
+    - ~--cos_nml~ COSMO namelists directory (default: ./COSMO_nml)
+    - ~--cos_exe~ path to COSMO executable (default: ./cosmo)
+    - ~--cesm_in~ CESM input files directory (default: ./CESM_input)
+    - ~--cesm_nml~ CESM namelists directory (default: ./CESM_nml)
+    - ~--cesm_exe~ path to CESM executable (default: ./cesm.exe)
+    - ~--oas_in~ OASIS input files directory (default: ./OASIS_input)
+    - ~--oas_nml~ OASIS namelists directory (default:
+      ./OASIS_nml). *WARNING*: it must contain a =namcouple_tmpl= file
+      in which there has to be a =_runtime_= placeholder so that the
+      tool can insert the right run time at each restart.
 
-** Archiving
+*** Domain decomposition and tasks organization
+    - ~--ncosx~ number of COSMO subdomains along the 'x-axis' (type:
+      int, default: from INPUT_ORG namelist)
+    - ~--ncosy~ number of COSMO subdomains along the 'y-axis' (type:
+      int, default: from INPUT_ORG namelist)
+    - ~--ncosio~ number of COSMO tasks dedicated to i/o work, not
+      tested (type: int, default: from INPUT_ORG namelist)
+    - ~--ncesm~ number of CESM subdomains (type: int, default: from
+      drv_in namelist)
+    The user has to make sure that the total number of tasks ~ncosx *
+    ncosy + ncosio + ncesm~ add up to a integer times the number of
+    tasks per node on the machine. When COSMO is ran in gpu mode,
+    ~ncesm~ is ignored and all available tasks are associated to CESM,
+    i.e. ~n_nodes * (n_tasks_per_node - 1)~
 
-** Other machine-independent options
+*** Run options
+    - ~--cosmo_only~ run only cosmo with the build-in soil model TERRA
+      (type: bool, using anything Python can parse as a boolean,
+      default: False). *Warning*: provide a COSMO executable compiled
+      accordingly.
+    - ~--gpu_mode~ run COSMO on gpu (type: bool, using anything Python
+      can parse as a boolean, default: False). *Warning*: provide a
+      COSMO executable compiled accordingly.
+    - ~--dummy_day~ extend the last chunk by 1 day in order to get
+      last COSMO output (type: bool, using anything Python can parse
+      as a boolean, default: True). *Warning*: make sure the
+      corresponding input file are available in the COSMO input
+      directory.
+    
+*** Transfer of input data during simulation
+    - ~--transfer_all~ transfer all model input files at once before
+      starting the simulation. If not, only transfer the data needed
+      to run the first chunk (type: bool, using anything Python can
+      parse as a boolean, default: True). This default value will most
+      probably be switched to False in a close future.
+    - ~--input_type~ either 'file' or 'symlink'. In the second case,
+      only a link to the original input file is created in the working
+      directory instead of an actual file. *Warning* the file system
+      where the original input files are stored has to be accessible
+      from the compute nodes. use in conjunction with
+      ~--transfer_all=1~.
 
-** Daint specific options
+*** Archiving
+    - ~--archive_dir~ directory where output and restart files are
+      archived (default: None). If not provided either to the command
+      line or by the setup file, no archiving is performed.
+    - ~--archive_rm~ remove original output files from the case
+      directory when archiving (type: bool, using anything Python can
+      parse as a boolean, default: False)
+*** Other machine-independent options
 
-** Mistral specific options
+*** Daint specific options
+
+*** Mistral specific options
 
 * Development
+  In this section we describe a bit how the utility is implemented and
+  how one can add options or support for a new machine.
+
 * COSMO_CLM2_tools                                                 :noexport:
   - [ ] Add doc strings
 ** example_setup.xml
@@ -293,8 +381,9 @@
                        oas_in='./OASIS_input', oas_nml='./OASIS_nml', archive_dir=None,
                        start_date=None, end_date=None, run_length=None,
                        ncosx=None, ncosy=None, ncosio=None, ncesm=None,
-                       gpu_mode=False, dummy_day=True, cosmo_only=False,
-                       gen_oasis=False, input_type='file', transfer_all=True,
+                       gpu_mode=False, dummy_day=True, cosmo_only=False, gen_oasis=False,
+                       input_type='file', transfer_all=True,
+                       archive_per_month=False, archive_compression='gzip', archive_cesm=True,
                        archive_rm=False):
 
               # Basic init (no particular work required)
@@ -309,6 +398,9 @@
               self.input_type = input_type
               self.transfer_all = transfer_all
               self.archive_dir = None if archive_dir is None else os.path.abspath(archive_dir)
+              self.archive_per_month = archive_per_month
+              self.archive_compression = archive_compression
+              self.archive_cesm = archive_cesm
               self.archive_rm = archive_rm
               self.transfer_by_chunck = not self.transfer_all and self.input_type == 'file'
               # Create namelists dictionnary
@@ -387,6 +479,7 @@
               if start_date is not None:
                   self._start_date = datetime.strptime(start_date, date_fmt['in'])
                   self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt['cosmo'])
+                  self.nml['INPUT_ORG']['runctl']['hstart'] = 0
                   if not self.cosmo_only:
                       self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._start_date.strftime(date_fmt['cesm']))
               elif 'ydate_ini' in self.nml['INPUT_ORG']['runctl']:
@@ -985,15 +1078,11 @@
 
           def __init__(self, run_time='24:00:00', account=None, partition=None,
                        shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
-                       transfer_time='02:00:00', archive_time='03:00:00', archive_per_month=False,
-                       archive_compression='gzip', archive_cesm=True, **base_case_args):
+                       transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
 
               self.run_time = run_time
               self.transfer_time = transfer_time
               self.archive_time = archive_time
-              self.archive_per_month = archive_per_month
-              self.archive_compression = archive_compression
-              self.archive_cesm = archive_cesm
               self.account = account
               self.modules_opt = modules_opt
               self.pgi_version = pgi_version
@@ -1143,7 +1232,7 @@
 
                   # Set transfer status
                   script.write('set_status "transfer" "transferring"\n\n')
-            
+
                   # Transfer
                   line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
                   script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n\n'))
@@ -1396,12 +1485,11 @@
           _target_machine='mistral'
           _n_tasks_per_node = 24
 
-    
+
           def __init__(self, run_time='08:00:00', account=None, partition=None,
-                       transfer_time='02:00:00', **base_case_args):
-        
+                       transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
+
               self.run_time = run_time
-              self.transfer_time = transfer_time
               self.account = account
               self.partition = partition
               cc2_case.__init__(self, **base_case_args)
@@ -1465,11 +1553,13 @@
                   f.seek(0)
                   f.write(content)
                   f.truncate()
-            
+
 
           def _submit_run_cmd(self):
 
-              check_call(['sbatch', self._run_job])
+              cmd = 'sbatch ' + self._run_job
+              print('submitting transfer with check_call(' + cmd + ', shell=True)')
+              check_call(cmd, shell=True)
 
 
           def _run_fun(self):
@@ -1614,7 +1704,7 @@
                                   help="number of subdomains along the 'y-axis'\n"
                                   "for COSMO domain decomposition (type: int, default: from INPUT_ORG namelist)")
           main_group.add_argument('--ncosio', action=cc2_act('main'), type=int,
-                                  help="number of cores dedicated to i/o work'\n"
+                                  help="number of cores dedicated to i/o work\n"
                                   "(type: int, default: from INPUT_ORG namelist)")
           main_group.add_argument('--ncesm', action=cc2_act('main'), type=int,
                                   help="number of subdomains for CESM domain decomposition'\n"
@@ -1634,17 +1724,16 @@
           main_group.add_argument('--transfer_all', action=cc2_act('main'), type=str_to_bool,
                                   help="Transfer all model input files at once before starting the simulation\n"
                                   "(type: bool, using anything Python can parse as a boolean, default: True)")
-          # Times are added to daint and mistral groups explicitly, not main, in order to allow for different defaults
-          main_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
-                                  help="reserved time on compute nodes\n"
-                                  "(default: '24:00:00' on daint, '08:00:00' on mistral)")
-          main_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
-                                  help="reserved time for transfer job (default: '02:00:00')")
-          main_group.add_argument('--archive_time', action=cc2_act('daint', 'mistral'),
-                                  help="reserved time for archive job (default: '03:00:00')")
 
           slurm_group = parser.add_argument_group('slurm', 'Options specific to the slurm workload manager.\n'\
                                                   '(common to all machines using the slurm scheduler)')
+          slurm_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
+                                  help="reserved time for run job\n"
+                                  "(default: '24:00:00' on daint, '08:00:00' on mistral)")
+          slurm_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
+                                  help="reserved time for transfer job (default: '02:00:00')")
+          slurm_group.add_argument('--archive_time', action=cc2_act('daint', 'mistral'),
+                                  help="reserved time for archive job (default: '03:00:00')")
           slurm_group.add_argument('--account', action=cc2_act('daint', 'mistral'),
                                    help="account to use for batch script\n"
                                    "(default: infered from $PROJECT on daint, None on mistral)")
