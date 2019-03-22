@@ -444,6 +444,12 @@ class cc2_case(object):
 
     def _apply_run_dates(self):
 
+        # Access to namelists
+        INPUT_ORG = self.nml['INPUT_ORG']
+        INPUT_IO = self.nml['INPUT_IO']
+        if not self.cosmo_only:
+            drv_in = self.nml['drv_in']
+
         # Compute times
         start_seconds = (self._run_start_date - self.start_date).total_seconds()
         dt = INPUT_ORG['runctl']['dt']
@@ -455,11 +461,6 @@ class cc2_case(object):
         hstop = hstart + runtime_hours
         nstop = (start_seconds + runtime_seconds) // dt - 1
 
-        # Access to namelists
-        INPUT_ORG = self.nml['INPUT_ORG']
-        INPUT_IO = self.nml['INPUT_IO']
-        if not self.cosmo_only:
-            drv_in = self.nml['drv_in']
 
         # adapt INPUT_ORG
         if 'hstop' in INPUT_ORG['runctl']:
