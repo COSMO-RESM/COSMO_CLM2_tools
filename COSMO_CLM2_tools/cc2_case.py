@@ -276,7 +276,7 @@ class cc2_case(object):
 
         if self.input_type == 'file':
             check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
-                        self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/'])
+                        self.cos_in, os.path.join(self.path,'COSMO_input')])
 
 
     def install_input(self):
@@ -445,10 +445,15 @@ class cc2_case(object):
     def _apply_run_dates(self):
 
         # Compute times
-        hstart = (self._run_start_date - self.start_date).total_seconds() // 3600.0
+        start_seconds = (self._run_start_date - self.start_date).total_seconds()
+        dt = INPUT_ORG['runctl']['dt']
         runtime_seconds = self._runtime.total_seconds()
-        runtime_hours = runtime_seconds // 3600.0
+        runtime_hours = runtime_seconds // 3600
+
+        hstart = start_seconds // 3600
+        nstart = start_seconds // dt - 1
         hstop = hstart + runtime_hours
+        nstop = (start_seconds + runtime_seconds) // dt - 1
 
         # Access to namelists
         INPUT_ORG = self.nml['INPUT_ORG']
@@ -459,13 +464,16 @@ class cc2_case(object):
         # adapt INPUT_ORG
         if 'hstop' in INPUT_ORG['runctl']:
             del INPUT_ORG['runctl']['hstop']
-        INPUT_ORG['runctl']['nstop'] = int(hstop * 3600.0 // INPUT_ORG['runctl']['dt']) - 1
+        INPUT_ORG['runctl']['nstop'] = nstop
         if 'hstop' in INPUT_ORG['runctl']:
             del INPUT_ORG['runctl']['hstop']
 
         # adapt INPUT_IO
         for gribout in self._get_gribouts():
-            gribout['hcomb'][0:2] = hstart, hstop
+            if 'hcomb' in gribout:
+                gribout['hcomb'][0:2] = hstart, hstop
+            elif 'ncomb' in gribout:
+                gribout['ncomb'][0:2] = nstart, nstop
         INPUT_IO['ioctl']['nhour_restart'] = [int(hstop), int(hstop), 24]
 
         if not self.cosmo_only:
@@ -900,7 +908,7 @@ class daint_case(cc2_case):
 
             # Transfer
             line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
-            script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'/\n\n'))
+            script.write(line.format(self.cos_in, os.path.join(self.path,'COSMO_input')+'\n\n'))
 
             # Submit next run
             script.write('if [[ $(get_status "run") == "complete" ]]; then\n')
