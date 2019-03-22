@@ -508,12 +508,18 @@ class cc2_case(object):
 
         # Only keep gribout blocks that fit within runtime
         # (essentially to avoid crash for short tests)
-        runtime_hours = self._runtime.total_seconds() // 3600.0
+        runtime_seconds = self._runtime.total_seconds()
+        runtime_hours = runtime_seconds // 3600.0
+        runtime_nstep = runtime_seconds // self.nml['NPUT_ORG']['runctl']['dt']
         gribouts_out = []
         gribouts_in = self._get_gribouts()
         for gribout in gribouts_in:
-            if runtime_hours >= gribout['hcomb'][2]:
-                gribouts_out.append(gribout)
+            if 'hcomb' in gribout:
+                if runtime_hours >= gribout['hcomb'][2]:
+                    gribouts_out.append(gribout)
+            elif 'ncomb' in gribout:
+                if runtime_nstep >= gribout['ncomb'][2]:
+                    gribouts_out.append(gribout)
         if gribouts_out:
             self.nml['INPUT_IO']['gribout'] = gribouts_out
             self.nml['INPUT_IO']['ioctl']['ngribout'] = len(gribouts_out)
