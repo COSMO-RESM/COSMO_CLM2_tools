@@ -276,7 +276,7 @@ class cc2_case(object):
 
         if self.input_type == 'file':
             check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
-                        self.cos_in, os.path.join(self.path,'COSMO_input')])
+                        self.cos_in+'/', os.path.join(self.path,'COSMO_input')])
 
 
     def install_input(self):
@@ -915,7 +915,7 @@ class daint_case(cc2_case):
 
             # Transfer
             line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
-            script.write(line.format(self.cos_in, os.path.join(self.path,'COSMO_input')+'\n\n'))
+            script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'\n\n'))
 
             # Submit next run
             script.write('if [[ $(get_status "run") == "complete" ]]; then\n')
