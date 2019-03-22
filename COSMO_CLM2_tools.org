@@ -819,15 +819,15 @@
               runtime_hours = runtime_seconds // 3600
 
               hstart = start_seconds // 3600
-              nstart = start_seconds // dt - 1
+              nstart = start_seconds // dt
               hstop = hstart + runtime_hours
-              nstop = (start_seconds + runtime_seconds) // dt - 1
+              nstop = (start_seconds + runtime_seconds) // dt
 
 
               # adapt INPUT_ORG
               if 'hstop' in INPUT_ORG['runctl']:
                   del INPUT_ORG['runctl']['hstop']
-              INPUT_ORG['runctl']['nstop'] = nstop
+              INPUT_ORG['runctl']['nstop'] = nstop - 1
               if 'hstop' in INPUT_ORG['runctl']:
                   del INPUT_ORG['runctl']['hstop']
 
