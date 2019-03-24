@@ -457,7 +457,7 @@ class cc2_case(object):
         runtime_hours = runtime_seconds // 3600
 
         hstart = start_seconds // 3600
-        nstart = start_seconds // dt
+        nstart = start_seconds // dt - 1
         hstop = hstart + runtime_hours
         nstop = (start_seconds + runtime_seconds) // dt
 
