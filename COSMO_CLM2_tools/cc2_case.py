@@ -510,7 +510,7 @@ class cc2_case(object):
         # (essentially to avoid crash for short tests)
         runtime_seconds = self._runtime.total_seconds()
         runtime_hours = runtime_seconds // 3600.0
-        runtime_nstep = runtime_seconds // self.nml['NPUT_ORG']['runctl']['dt']
+        runtime_nstep = runtime_seconds // self.nml['INPUT_ORG']['runctl']['dt']
         gribouts_out = []
         gribouts_in = self._get_gribouts()
         for gribout in gribouts_in:
