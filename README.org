@@ -1,4 +1,4 @@
-# Created 2019-04-15 Mon 17:29
+# Created 2019-04-15 Mon 17:32
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -279,7 +279,8 @@ i.e. ~n_nodes * (n_tasks_per_node - 1)~
   output file might be needed uppon restart.
 
 *** Scheduling options
-Options for the scheduling system
+Options for the scheduling system. In the xml configuration file,
+these have to be put under the machine specific node.
 - ~--run_time~ reserved time for run job (default: '24:00:00' on
   daint, '08:00:00' on mistral)
 - ~--transfer_time~ reserved time for transfer job (default:
