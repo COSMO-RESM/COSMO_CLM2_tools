@@ -287,7 +287,9 @@
       '03:00:00')
 
 *** SLURM options
-    Options specific to the SLURM scheduling system
+    Options specific to the SLURM scheduling system. In the xml
+    configuration file, these have to be put under the machine
+    specific node.
     - ~--account~ account to use for submitted job scripts (default:
       infered from $PROJECT on daint, None on mistral)
     - ~--partition~ queue to witch the run job gets submitted, mostly
