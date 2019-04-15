@@ -51,7 +51,7 @@ class cc2_case(object):
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, dummy_day=True, cosmo_only=False, gen_oasis=False,
                  input_type='file', transfer_all=True,
-                 archive_per_month=False, archive_compression='gzip', archive_cesm=True, archive_rm=False,
+                 archive_per_month=False, archive_compression='none', archive_cesm=True, archive_rm=False,
                  start_mode='startup', restart_date=None):
 
         # Basic init (no particular work required)

@@ -66,6 +66,14 @@ def create_case():
     main_group.add_argument('--archive_rm', action=cc2_act('main'), type=str_to_bool,
                             help="remove original output files from the case directory when archiving\n"
                             "(type: bool, using anything Python can parse as a boolean, default: False)")
+    main_group.add_argument('--archive_per_month', action=cc2_act('daint'), type=str_to_bool,
+                             help="submit one archiving job per month. For massive output simulations.\n"
+                             "(type: bool, using anything Python can parse as a boolean, default: False)")
+    main_group.add_argument('--archive_compression', action=cc2_act('daint'), choices=['none', 'gzip', 'bzip2'],
+                             help="select the compression algorithm (default: 'gzip')")
+    main_group.add_argument('--archive_cesm', action=cc2_act('daint'), type=str_to_bool,
+                             help="archive cesm output or not\n"
+                             "(type: bool, using anything Python can parse as a boolean, default: True)")
     main_group.add_argument('--start_date', metavar='DATE_1', action=cc2_act('main'),
                             help="simulation start date formatted as YYYY-MM-DD-HH")
     main_group.add_argument('--end_date', metavar='DATE_2', action=cc2_act('main'),
@@ -155,14 +163,6 @@ def create_case():
                              help="specify pgi compiler version at run time (default: None)")
     daint_group.add_argument('--shebang', action=cc2_act('daint'),
                              help="submit script shebang (default: #!/bin/bash)")
-    daint_group.add_argument('--archive_per_month', action=cc2_act('daint'), type=str_to_bool,
-                             help="submit one archiving job per month. For massive output simulations.\n"
-                             "(type: bool, using anything Python can parse as a boolean, default: False)")
-    daint_group.add_argument('--archive_compression', action=cc2_act('daint'), choices=['none', 'gzip', 'bzip2'],
-                             help="select the compression algorithm (default: 'gzip')")
-    daint_group.add_argument('--archive_cesm', action=cc2_act('daint'), type=str_to_bool,
-                             help="archive cesm output or not\n"
-                             "(type: bool, using anything Python can parse as a boolean, default: True)")
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',

@@ -81,7 +81,7 @@
      scheduler related options, are also stored there as the default
      value might vary from machine to machine.
 
-   #+BEGIN_SRC nxml
+   #+BEGIN_SRC xml
      <?xml version="1.0" encoding="utf-8"?>
      <setup>
        <machine></machine>
@@ -309,7 +309,7 @@
 * COSMO_CLM2_tools                                                 :noexport:
   - [ ] Add doc strings
 ** example_setup.xml
-   #+BEGIN_SRC nxml :tangle COSMO_CLM2_tools/example_setup.xml
+   #+BEGIN_SRC xml :tangle COSMO_CLM2_tools/example_setup.xml
      <?xml version="1.0" encoding="utf-8"?>
      <setup>
        <!-- main and machine specific options can also be set through the command line.

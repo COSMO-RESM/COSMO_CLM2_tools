@@ -1,4 +1,4 @@
-# Created 2019-04-15 Mon 17:22
+# Created 2019-04-15 Mon 17:24
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -82,7 +82,7 @@ different nodes in the xml setup file:
   scheduler related options, are also stored there as the default
   value might vary from machine to machine.
 
-#+begin_src nxml
+#+begin_src xml
   <?xml version="1.0" encoding="utf-8"?>
   <setup>
     <machine></machine>
