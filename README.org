@@ -1,4 +1,4 @@
-# Created 2019-03-21 Thu 18:05
+# Created 2019-04-15 Mon 17:22
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -78,9 +78,11 @@ different nodes in the xml setup file:
   subject to change and might eventually move to the ~main~ node
 - the ~main~ node contains machine-independent options
 - machine specific options are stored under the node named after
-  the machine
+  the machine. Note that options common to several machines, like
+  scheduler related options, are also stored there as the default
+  value might vary from machine to machine.
 
-#+begin_src xml
+#+begin_src nxml
   <?xml version="1.0" encoding="utf-8"?>
   <setup>
     <machine></machine>
@@ -138,12 +140,17 @@ option value has to be interpreted as something else than a string,
 the type must be provided as an attribute to the option node (see
 example from the previous section). It can be either ~"py_eval"~
 for directly evaluating the string by python or any valid python
-type. For some options you will see "type: bool, using anything
-Python can parse as a boolean" in the command line help instead of
-an option that doesn't require an argument. So for instance you
-might have to specify ~--gpu_mode 1~ or ~--gpu_mode bla~ instead
-of the more usual ~--gpu_mode~ only. This is due to the internals
-of the code and how defaults are implemented.
+type.
+
+For boolean options you will see "type: bool, using anything Python
+can parse as a boolean" in the command line help instead of an
+option that doesn't require an argument. So for instance you might
+have to specify ~--gpu_mode 1~ or ~--gpu_mode bla~ instead of the
+more usual ~--gpu_mode~ only. For the xml file, you can specify in
+both ways: either ~type="py_eval"~ as attribute and ~True~ or
+~False~ for the value or ~type="bool"~ and anything Python can
+parse as a boolean for the value. This is due to the internals of
+the code and how defaults are implemented.
 
 *** Basic options
 - =-s, --setup_file= path to the xml setup file. Beware that all
@@ -151,8 +158,7 @@ of the code and how defaults are implemented.
   command line are relative to where the ~cc2_create_case~ command
   gets executed.
 - =--machine= specify the machine name. It has to be given either by
-  the command line or the in the setup file, i.e. there's no
-  default value
+  the command line or the in the setup file.
 - ~--name~ case name. The working directory will be named after
   the case name. It also affects CESM output file names.
 - ~--install_dir~ the case working directory gets created as
@@ -203,6 +209,24 @@ i.e. ~n_nodes * (n_tasks_per_node - 1)~
   (type: bool, using anything Python can parse as a boolean,
   default: False). *Warning*: provide a COSMO executable compiled
   accordingly.
+- ~--start_mode~ specify the type of start requested (choices:
+  'startup', 'continue', 'restart', default: 'startup').
+  - 'startup' is for simulations with a classical initial state.
+  - 'continue' is for continuing an existing simulation. Use in
+    conjunction with the ~restart_date~, ~cos_rst~ and ~cesm_rst~
+    options. *Warning*: the original and continued cases need to
+    have the same name. Also do not modify the ~start_date~
+    option, keep the original case start date and use the
+    ~restart_date~ option for specifying when to continue.
+  - 'restart' is for restarting from another case, *Warning*:
+    doesn't work yet!
+- ~--restart_date~ restart/continue date formatted as
+  YYYY-MM-DD-HH
+- ~--cos_rst~ path to the COSMO restart file. Compresed restart
+  files with extension '.gz' or '.bz2' are accepted
+- ~--cesm_rst~ path to the directory containing CESM restart
+  files. Archives, compresed or not, with extension '.tar',
+  '.tgz', '.tar.gz', '.tbz' or '.tar.bz2' are accepted.
 - ~--gpu_mode~ run COSMO on gpu (type: bool, using anything Python
   can parse as a boolean, default: False). *Warning*: provide a
   COSMO executable compiled accordingly.
@@ -240,7 +264,19 @@ i.e. ~n_nodes * (n_tasks_per_node - 1)~
   line or by the setup file, no archiving is performed.
 - ~--archive_rm~ remove original output files from the case
   directory when archiving (type: bool, using anything Python can
-  parse as a boolean, default: False)
+  parse as a boolean, default: False). Note that this option has
+  no effect on the archiving of restart files who are needed by
+  the potential next run by definition
+- ~--archive_cmpression~ specify which compression algorithm is
+  used before transferring the archive (available choices: 'none',
+  'gzip' and 'bzip2', default: 'none'). For heavy output
+  simulations, you might be better off compressing the archived
+  output data yourself.
+- ~--archive_cesm~ archive or not the CESM output (type: bool,
+  using anything Python can parse as a boolean, default:
+  True). The idea is that a CESM output stream might contain more
+  than one time slice. So depending how this is specified, the
+  output file might be needed uppon restart.
 
 *** Scheduling options
 Options for the scheduling system

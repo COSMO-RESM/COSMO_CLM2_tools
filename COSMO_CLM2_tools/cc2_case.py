@@ -38,20 +38,21 @@ class cc2_case(object):
     _transfer_job = 'cc2_transfer_job'
     _archive_job = 'cc2_archive_job'
     _xml_config = 'cc2_config.xml'
+    _transfer_list = 'cc2_transfer_list'
     NotImplementedMessage = "required method {:s} not implemented by class {:s}.\n" \
                             "Implement with a single pass statement if irrelevant to this machine."
 
 
     def __init__(self, name='COSMO_CLM2', install_dir=None, install=False,
-                 cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo',
-                 cesm_nml='./CESM_nml', cesm_in='./CESM_input', cesm_exe='./cesm.exe',
+                 cos_nml='./COSMO_nml', cos_in='./COSMO_input', cos_exe='./cosmo', cos_rst=None,
+                 cesm_nml='./CESM_nml', cesm_in='./CESM_input', cesm_exe='./cesm.exe', cesm_rst=None,
                  oas_in='./OASIS_input', oas_nml='./OASIS_nml', archive_dir=None,
                  start_date=None, end_date=None, run_length=None,
                  ncosx=None, ncosy=None, ncosio=None, ncesm=None,
                  gpu_mode=False, dummy_day=True, cosmo_only=False, gen_oasis=False,
                  input_type='file', transfer_all=True,
-                 archive_per_month=False, archive_compression='gzip', archive_cesm=True,
-                 archive_rm=False):
+                 archive_per_month=False, archive_compression='gzip', archive_cesm=True, archive_rm=False,
+                 start_mode='startup', restart_date=None):
 
         # Basic init (no particular work required)
         self.name = name
@@ -70,6 +71,7 @@ class cc2_case(object):
         self.archive_cesm = archive_cesm
         self.archive_rm = archive_rm
         self.transfer_by_chunck = not self.transfer_all and self.input_type == 'file'
+        self.start_mode = start_mode
         # Create namelists dictionnary
         self.nml = nmldict(self)
         # Set install_dir and path
@@ -78,14 +80,17 @@ class cc2_case(object):
         if self.install:
             log = 'Setting up case {:s} in {:s}'.format(self.name, self._path)
             print(log + '\n' + '-' * len(log))
-            self.install_case(cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in)
+            self.install_case(cos_nml, cos_in, cos_exe, cos_rst, cesm_nml, cesm_in, cesm_exe, cesm_rst, oas_nml, oas_in)
+            self.create_missing_dirs()
         self.cos_exe = cos_exe
         if not self.cosmo_only:
             self.cesm_exe = cesm_exe
         # Settings involving namelist changes
         self.start_date = start_date
+        self.restart_date = restart_date
         self.end_date = end_date
-        # - ML - Some of the following is useless for transfer action
+        self.set_nml_start_parameters()
+        # - ML - Some of the following is useless for transfer and archive actions
         self._compute_run_dates()   # defines _run_start_date, _run_end_date and _runtime (_end_date if needed)
         self._apply_run_dates()   # put dates and runtime in namelists objects (writing to file at the end)
         self._check_INPUT_IO()
@@ -97,7 +102,6 @@ class cc2_case(object):
                 self._build_transfer_job()
             if self.archive_dir is not None:
                 self._build_archive_job()
-            self._create_missing_dirs()
             self.to_xml()
             self.install_input()
         # Write modified namelists to file
@@ -146,14 +150,21 @@ class cc2_case(object):
         if start_date is not None:
             self._start_date = datetime.strptime(start_date, date_fmt['in'])
             self.nml['INPUT_ORG']['runctl']['ydate_ini'] = self._start_date.strftime(date_fmt['cosmo'])
-            self.nml['INPUT_ORG']['runctl']['hstart'] = 0
-            if not self.cosmo_only:
-                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._start_date.strftime(date_fmt['cesm']))
         elif 'ydate_ini' in self.nml['INPUT_ORG']['runctl']:
             self._start_date = datetime.strptime(self.nml['INPUT_ORG']['runctl']['ydate_ini'],
                                                  date_fmt['cosmo'])
         else:
             raise ValueError("ydate_ini has to be given in INPUT_ORG/runctl if no start_date is provided")
+
+    @property
+    def restart_date(self):
+        return self._restart_date
+    @restart_date.setter
+    def restart_date(self, restart_date):
+        if restart_date is not None:
+            self._restart_date = datetime.strptime(restart_date, date_fmt['in'])
+        else:
+            self._restart_date = None
 
     @property
     def end_date(self):
@@ -199,7 +210,7 @@ class cc2_case(object):
         tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
 
 
-    def install_case(self, cos_nml, cos_in, cos_exe, cesm_nml, cesm_in, cesm_exe, oas_nml, oas_in):
+    def install_case(self, cos_nml, cos_in, cos_exe, cos_rst, cesm_nml, cesm_in, cesm_exe, cesm_rst, oas_nml, oas_in):
 
         if not os.path.exists(self.path):
             # Create case directory
@@ -230,8 +241,50 @@ class cc2_case(object):
                         pass
             check_call(['rsync', '-avrL', os.path.abspath(oas_nml)+'/', self.path])
 
+        if self.start_mode != 'startup':
+            if 'ydir_restart_in' in self.nml['INPUT_IO']['ioctl']:
+                cos_rst_nml = self.nml['INPUT_IO']['ioctl']['ydir_restart_in']
+            elif 'ydir_restart' in  self.nml['INPUT_IO']['ioctl']:
+                cos_rst_nml = self.nml['INPUT_IO']['ioctl']['ydir_restart']
+            else:
+                cos_rst_nml = ''
+            self._mk_miss_path(cos_rst_nml)
+            cos_rst_target = os.path.normpath(os.path.join(self.path, cos_rst_nml, os.path.basename(cos_rst)))
+            check_call(['rsync', '-avL', cos_rst, cos_rst_target])
+
+            if cos_rst.endswith('.gz'):
+                check_call(['gunzip', cos_rst_target])
+            elif cos_rst.endswith('.bz2'):
+                check_call(['bzip2', cos_rst_target])
+
+            if cesm_rst.endswith('.tar'):
+                check_call(['tar', '-xvf', cesm_rst, '-C', self.path])
+            elif cesm_rst.endswith(('.tgz', '.tar.gz')):
+                check_call(['tar', '-zxvf', cesm_rst, '-C', self.path])
+            elif cesm_rst.endswith(('.tbz', '.tar.bz2')):
+                check_call(['tar', '-jxvf', cesm_rst, '-C', self.path])
+            else:
+                check_call(['rsync', '-avL', cesm_rst_origin+'/', self.path])
+
         # Set case name in namelist
         self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
+
+
+    def set_nml_start_parameters(self):
+
+        if self.start_mode == 'startup':
+            self.nml['INPUT_ORG']['runctl']['hstart'] = 0
+            if not self.cosmo_only:
+                self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'startup'
+                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self.start_date.strftime(date_fmt['cesm']))
+        else:
+            self.nml['INPUT_ORG']['runctl']['hstart'] = (self.restart_date - self.start_date).total_seconds() // 3600.0
+            if not self.cosmo_only:
+                if self.start_mode == 'continue':
+                    self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'continue'
+                elif self.start_mode == 'restart':
+                    self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'branch' 
+                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self.restart_date.strftime(date_fmt['cesm']))
 
 
     def _cos_input_delta_ext(self):
@@ -263,7 +316,7 @@ class cc2_case(object):
                 raise ValueError("input file {:s} is missing from {:s}".format(file_name, self.cos_in))
 
         # Build file list to transfer or symlink
-        with open('transfer_list', mode ='w') as t_list:
+        with open(self._transfer_list, mode ='w') as t_list:
             if initial:
                 _check_add_file('laf', start_date, t_list)
             cur_date = start_date
@@ -275,7 +328,7 @@ class cc2_case(object):
     def transfer_input(self):
 
         if self.input_type == 'file':
-            check_call(['rsync', '-avrL', '--files-from', 'transfer_list',
+            check_call(['rsync', '-avrL', '--files-from', self._transfer_list,
                         self.cos_in+'/', os.path.join(self.path,'COSMO_input')])
 
 
@@ -291,36 +344,17 @@ class cc2_case(object):
         self._mk_miss_path('COSMO_input')
 
         # Transfer first chunck input files or all
+        initial = self.start_mode == 'startup'
         if self.transfer_by_chunck and self._run_end_date < self.end_date:
-            self.build_transfer_list(self.start_date, self._run_end_date, initial=True)
+            self.build_transfer_list(self._run_start_date, self._run_end_date, initial=initial)
         else:
             end_date = self.end_date + timedelta(days=1) if self.dummy_day else self.end_date
-            self.build_transfer_list(self.start_date, end_date, initial=True)
+            self.build_transfer_list(self._run_start_date, end_date, initial=initial)
         self.transfer_input()
-        os.remove('transfer_list')
+        os.remove(self._transfer_list)
 
         # Set transfer status
         self.transfer_status = 'complete'
-
-
-    def submit_next_run(self):
-
-        next_end_date = self.get_next_run_end_date()
-        self._update_run_job(self._run_end_date, next_end_date)
-        self.submit_run()
-
-
-    def submit_next_transfer(self):
-
-        cwd = os.getcwd()
-        os.chdir(self.path)
-
-        next_end_date = self.get_next_run_end_date()
-        self.build_transfer_list(self._run_end_date, next_end_date)
-        self._update_transfer_job(self._run_end_date, next_end_date)
-        self._submit_transfer_cmd()
-
-        os.chdir(cwd)
 
 
     def _check_COSMO_input(self, start_date, end_date):
@@ -475,12 +509,20 @@ class cc2_case(object):
                 gribout['hcomb'][0:2] = hstart, hstop
             elif 'ncomb' in gribout:
                 gribout['ncomb'][0:2] = nstart, nstop
-        INPUT_IO['ioctl']['nhour_restart'] = [int(hstop), int(hstop), 24]
+        if self._run_end_date > self.end_date:
+            # ensure restart for the real end date, not after the dummy day
+            INPUT_IO['ioctl']['nhour_restart'] = [int(hstop)-24, int(hstop)-24, 24]
+        else:
+            INPUT_IO['ioctl']['nhour_restart'] = [int(hstop), int(hstop), 24]
 
         if not self.cosmo_only:
             # adapt drv_in
             drv_in['seq_timemgr_inparm']['stop_n'] = int(runtime_seconds)
-            drv_in['seq_timemgr_inparm']['restart_n'] = int(runtime_seconds)
+            if self._run_end_date > self.end_date:
+                # ensure restart for the real end date, not after the dummy day
+                drv_in['seq_timemgr_inparm']['restart_n'] = int(runtime_seconds)-86400
+            else:
+                drv_in['seq_timemgr_inparm']['restart_n'] = int(runtime_seconds)
 
             # adapt namcouple
             with open(os.path.join(self.path, 'namcouple_tmpl'), mode='r') as f:
@@ -543,7 +585,7 @@ class cc2_case(object):
         self.nml.write_all()
 
 
-    def _create_missing_dirs(self):
+    def create_missing_dirs(self):
 
         # COSMO
         # -----
@@ -605,6 +647,10 @@ class cc2_case(object):
         ET.SubElement(main_node, 'gpu_mode', type='py_eval').text = str(self.gpu_mode)
         ET.SubElement(main_node, 'dummy_day', type='py_eval').text = str(self.dummy_day)
         ET.SubElement(main_node, 'transfer_all', type='py_eval').text = str(self.transfer_all)
+        ET.SubElement(main_node, 'start_mode').text = self.start_mode
+        node = ET.SubElement(main_node, 'restart_date')
+        if self.start_mode != 'startup':
+            node.text = self.restart_date.strftime(date_fmt['in'])
 
         status_node = ET.SubElement(config_node, 'status')
         ET.SubElement(status_node, 'run_status')
@@ -623,23 +669,11 @@ class cc2_case(object):
     def set_next_run(self):
 
         if self._run_end_date < self._end_date:
-            # Set new run start date in namelists
-            hstart = (self._run_end_date - self._start_date).total_seconds() // 3600.0
-            self.nml['INPUT_ORG']['runctl']['hstart'] = hstart
-            if not self.cosmo_only:
-                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self._run_end_date.strftime(date_fmt['cesm']))
-
-            # Set namelists parameters for "restart mode"
-            # - ML - Setting ydirini might be useless, try without at some point
-            if 'ydir_restart_out' in self.nml['INPUT_IO']['ioctl']:
-                self.nml['INPUT_IO']['gribin']['ydirini'] = self.nml['INPUT_IO']['ioctl']['ydir_restart_out']
-            for gribout in self._get_gribouts():
-                gribout['lwrite_const'] = False
-            if not self.cosmo_only:
-                self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'continue'
-
-            # Write namelists to file
-            self.write_open_nml()
+            tree = ET.parse(os.path.join(self.path, self._xml_config))
+            main_node = tree.find('main')
+            main_node.find('start_mode').text = 'continue'
+            main_node.find('restart_date').text = self._run_end_date.strftime(date_fmt['in'])
+            tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
 
 
     def submit_run(self):
@@ -647,17 +681,29 @@ class cc2_case(object):
         cwd = os.getcwd()
         os.chdir(self.path)
 
-        self._submit_run_cmd()
+        self._submit_run_cmd(self._run_start_date, self._run_end_date)
 
         os.chdir(cwd)
 
 
-    def submit_transfer(self):
+    def submit_next_run(self):
 
         cwd = os.getcwd()
         os.chdir(self.path)
 
-        self._submit_transfer_cmd()
+        self._submit_run_cmd(self._run_end_date, self.get_next_run_end_date())
+
+        os.chdir(cwd)
+
+
+    def submit_next_transfer(self):
+
+        cwd = os.getcwd()
+        os.chdir(self.path)
+
+        next_end_date = self.get_next_run_end_date()
+        self.build_transfer_list(self._run_end_date, next_end_date)
+        self._submit_transfer_cmd(self._run_end_date, next_end_date)
 
         os.chdir(cwd)
 
@@ -699,22 +745,10 @@ class cc2_case(object):
         raise NotImplementedError(self.NotImplementedMessage.format('_build_run_job(self)', self.__class__.__name__))
 
 
-    def _update_run_job(self):
-        """Place holder for _update_run_job method to be implemented by machine specific classes."""
-
-        raise NotImplementedError(self.NotImplementedMessage.format('_update_run_job(self)', self.__class__.__name__))
-
-
     def _build_transfer_job(self):
         """Place holder for _build_transfer_job method to be implemented by machine specific classes."""
 
         raise NotImplementedError(self.NotImplementedMessage.format('_build_transfer_job(self)', self.__class__.__name__))
-
-
-    def _update_transfer_job(self):
-        """Place holder for _update_transfer_job method to be implemented by machine specific classes."""
-
-        raise NotImplementedError(self.NotImplementedMessage.format('_update_transfer_job(self)', self.__class__.__name__))
 
 
     def _build_archive_job(self):
@@ -753,7 +787,7 @@ class daint_case(cc2_case):
     _target_machine='daint'
     _n_tasks_per_node = 12
     _default_install_dir = os.path.normpath(os.environ['SCRATCH'])
-    _post_transfer_job = 'cc2_post_transfer_job'
+    _archive_rst_job = 'cc2_archive_rst_job'
 
 
     def __init__(self, run_time='24:00:00', account=None, partition=None,
@@ -797,167 +831,174 @@ class daint_case(cc2_case):
 
     def _build_run_job(self):
 
-        d1_str = self._run_start_date.strftime(date_fmt['cesm'])
-        d2_str = self._run_end_date.strftime(date_fmt['cesm'])
-        logfile = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
+        # Header
+        # ------
+        script_str = '{:s}\n\n'.format(self.shebang)
+        script_str += '#SBATCH --constraint=gpu\n'
+        script_str += '#SBATCH --job-name={:s}\n'.format(self.name)
+        script_str += '#SBATCH --nodes={:d}\n'.format(self._n_nodes)
+        script_str += '#SBATCH --account={:s}\n'.format(self.account)
+        script_str += '#SBATCH --time={:s}\n'.format(self.run_time)
+        script_str += '#SBATCH --gres=gpu:1\n'
+        if self.partition is not None:
+            script_str += '#SBATCH --partition={:s}\n'.format(self.partition)
 
-        with open(os.path.join(self.path, self._run_job), mode='w') as script:
-            # shebang
-            script.write('{:s}\n\n'.format(self.shebang))
+        # environment variables
+        # ---------------------
+        script_str +='''
+export MALLOC_MMAP_MAX_=0
+export MALLOC_TRIM_THRESHOLD_=536870912
 
-            # slurm options
-            script.write('#SBATCH --constraint=gpu\n')
-            script.write('#SBATCH --job-name={:s}\n'.format(self.name))
-            script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
-            script.write('#SBATCH --output={:s}\n'.format(logfile))
-            script.write('#SBATCH --error={:s}\n'.format(logfile))
-            script.write('#SBATCH --account={:s}\n'.format(self.account))
-            script.write('#SBATCH --time={:s}\n'.format(self.run_time))
-            script.write('#SBATCH --gres=gpu:1\n')
-            if self.partition is not None:
-                script.write('#SBATCH --partition={:s}\n'.format(self.partition))
-            script.write('\n')
+# Set this to avoid segmentation faults
+ulimit -s unlimited
+ulimit -a
 
-            # environment variables
-            script.write('export MALLOC_MMAP_MAX_=0\n')
-            script.write('export MALLOC_TRIM_THRESHOLD_=536870912\n')
-            script.write('\n')
-            script.write('# Set this to avoid segmentation faults\n')
-            script.write('ulimit -s unlimited\n')
-            script.write('ulimit -a\n')
-            script.write('\n')
-            script.write('export OMP_NUM_THREADS=1\n')
+export OMP_NUM_THREADS=1
+'''
+        if self.gpu_mode:
+            script_str += '''
+# Use for gpu mode
+export MV2_ENABLE_AFFINITY=0
+export MV2_USE_CUDA=1
+export MPICH_G2G_PIPELINE=256
+'''
+            if self.cosmo_only:
+                script_str += 'export MPICH_RDMA_ENABLED_CUDA=1\n'
+
+        # Modules
+        # -------
+        script_str += '\n'
+        if self.modules_opt != 'none':
+            # pgi programing environment
+            if self.modules_opt == 'purge':
+                script_str += 'module purge\n'
+                script_str += 'module load PrgEnv-pgi\n'
+            elif self.modules_opt == 'switch':
+                script_str += 'module switch PrgEnv-cray PrgEnv-pgi\n'
+            # pgi version
+            if self.pgi_version is not None:
+                script_str += 'module unload pgi\n'
+                script_str += 'module load pgi/{:s}\n'.format(self.pgi_version)
+
+            # other modules
+            script_str += 'module load daint-gpu\n'
+            script_str += 'module load cray-netcdf\n'
             if self.gpu_mode:
-                script.write('\n')
-                script.write('# Use for gpu mode\n')
-                script.write('export MV2_ENABLE_AFFINITY=0\n')
-                script.write('export MV2_USE_CUDA=1\n')
-                script.write('export MPICH_G2G_PIPELINE=256\n')
-                if self.cosmo_only:
-                    script.write('export MPICH_RDMA_ENABLED_CUDA=1\n')
-            script.write('\n')
+                script_str += 'module load craype-accel-nvidia60\n'
+            script_str += '\n'
 
-            # Modules
-            if self.modules_opt != 'none':
-                # pgi programing environment
-                if self.modules_opt == 'purge':
-                    script.write('module purge\n')
-                    script.write('module load PrgEnv-pgi\n')
-                elif self.modules_opt == 'switch':
-                    script.write('module switch PrgEnv-cray PrgEnv-pgi\n')
-                # pgi version
-                if self.pgi_version is not None:
-                    script.write('module unload pgi\n')
-                    script.write('module load pgi/{:s}\n'.format(self.pgi_version))
+        # launch case
+        # -----------
+        script_str += 'cc2_control_case ./{:s}'.format(self._xml_config)
 
-                # other modules
-                script.write('module load daint-gpu\n')
-                script.write('module load cray-netcdf\n')
-                if self.gpu_mode:
-                    script.write('module load craype-accel-nvidia60\n')
-                script.write('\n')
-
-            # - ML - test: Keep track of the environment
-            script.write('env | sort > env_{:s}-{:s}\n\n'.format(d1_str, d2_str))
-
-            # launch case
-            script.write('cc2_control_case ./{:s}'.format(self._xml_config))
+        # Write to file
+        # -------------
+        with open(os.path.join(self.path, self._run_job), mode='w') as script:
+            script.write(script_str)
 
 
-    def _update_run_job(self, d1, d2):
+    def _submit_run_cmd(self, d1, d2):
 
         d1_str = d1.strftime(date_fmt['cesm'])
         d2_str = d2.strftime(date_fmt['cesm'])
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
-        rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
-                 '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile),
-                 # - ML - test: Keep track of the environment
-                 'env \| sort > env_.*$': 'env | sort > env_{:s}-{:s}'.format(d1_str, d2_str)}
-        with open(os.path.join(self.path, self._run_job), mode='r+') as f:
-            content = f.read()
-            for pattern, repl in rules.items():
-                content = re.sub(pattern, repl, content, flags=re.MULTILINE)
-            f.seek(0)
-            f.write(content)
-            f.truncate()
+
+        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s}'
+        cmd = cmd_tmpl.format(log=logfile, job=self._run_job)
+        print("submitting run with check_call('" + cmd + "', shell=True)")
+        check_call(cmd, shell=True)
 
 
     def _build_transfer_job(self):
 
-        logfile = 'transfer_start_date-end_date.out'
+        # Header
+        # ------
+        script_str = '#!/bin/bash -l\n\n'
+        script_str += '#SBATCH --partition=xfer\n'
+        script_str += '#SBATCH --ntasks=1\n'
+        script_str += '#SBATCH --time={:s}\n'.format(self.transfer_time)
+        script_str += '#SBATCH --job-name=cc2_transfer\n\n'
 
+        # Case dependent variables
+        # ------------------------
+        script_str += '# Case dependent variables\n'
+        script_str += '# ------------------------\n'
+        script_str += 'run_job={:s}\n'.format(self._run_job)
+        script_str += 'xml_config={:s}\n'.format(self._xml_config)
+        script_str += 'cos_in_origin={:s}\n'.format(self.cos_in)
+        script_str += 'cos_in_target={:s}\n'.format(os.path.join(self.path,'COSMO_input'))
+        script_str += 'transfer_list={:s}\n'.format(self._transfer_list)
+
+        # Main script
+        # -----------
+        # Use sed commands to handle case status as python isn't available on the xfer queue.
+        # Otherwise just use cc2_control --action=transfer
+        script_str += '''
+# Functions to get and set case status
+# ------------------------------------
+get_status(){
+    sed -n 's@\s*<'$1'_status>\(.*\)</'$1'_status>@\\1@p' ${xml_config}
+}
+set_status(){
+    sed -i 's@\(\s*<'$1'_status>\).*\(</'$1'_status>\)@\\1'$2'\\2@' ${xml_config}
+}
+
+# Set transfer status
+# -------------------
+set_status "transfer" "transferring"
+
+# Transfer
+# --------
+rsync -avrL --files-from ${transfer_list} ${cos_in_origin} ${cos_in_target}
+
+# Submit next run
+# ---------------
+if [[ $(get_status "run") == "complete" ]]; then
+    set_status "run" "submitted"
+    unset SLURM_MEM_PER_CPU
+    sbatch --output $1 --error $1 ${run_job}
+fi
+
+# Set transfer status
+# -------------------
+set_status "transfer" "complete"'''
+
+        # Write to file
+        # -------------
         with open(os.path.join(self.path, self._transfer_job), mode='w') as script:
-            # shebang
-            script.write('#!/bin/bash -l\n\n')
-
-            # slurm options
-            script.write('#SBATCH --job-name=cc2_transfer\n')
-            script.write('#SBATCH --ntasks=1\n')
-            script.write('#SBATCH --output={:s}\n'.format(logfile))
-            script.write('#SBATCH --error={:s}\n'.format(logfile))
-            script.write('#SBATCH --account={:s}\n'.format(self.account))
-            script.write('#SBATCH --time={:s}\n'.format(self.transfer_time))
-            script.write('#SBATCH --partition=xfer\n\n')
-
-            # Use sed commands to handle case status as python isn't available on the xfer queue.
-            # Otherwise just use cc2_control --action=transfer
-
-            # Define functions to get and set case status
-            script.write('get_status(){\n')
-            script.write("    sed -n 's@\s*<'$1'_status>\(.*\)</'$1'_status>@\\1@p' {:s}\n".format(self._xml_config))
-            script.write('}\n')
-            script.write('set_status(){\n')
-            script.write("    sed -i 's@\(\s*<'$1'_status>\).*\(</'$1'_status>\)@\\1'$2'\\2@' {:s}\n".format(self._xml_config))
-            script.write('}\n\n')
-
-            # Set transfer status
-            script.write('set_status "transfer" "transferring"\n\n')
-
-            # Transfer
-            line = 'rsync -avrL --files-from transfer_list {:s} {:s}'
-            script.write(line.format(self.cos_in+'/', os.path.join(self.path,'COSMO_input')+'\n\n'))
-
-            # Submit next run
-            script.write('if [[ $(get_status "run") == "complete" ]]; then\n')
-            script.write('    sleep 10\n') # avoid race condition 
-            script.write('    if [[ $(get_status "run") == "complete" ]]; then\n')
-            script.write('        set_status "run" "submitted"\n')
-            script.write('        sbatch {:s}\n'.format(self._run_job))
-            script.write('    fi\n')
-            script.write('fi\n\n')
-
-            # Set transfer status            
-            script.write('set_status "transfer" "complete"')
+            script.write(script_str)
 
 
-    def _update_transfer_job(self, d1, d2):
+    def _submit_transfer_cmd(self, d1, d2):
 
         d1_str = d1.strftime(date_fmt['cesm'])
         d2_str = d2.strftime(date_fmt['cesm'])
-        logfile = '{:s}_{:s}-{:s}.out'.format('transfer', d1_str, d2_str)
-        rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
-                 '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
-        with open(os.path.join(self.path, self._transfer_job), mode='r+') as f:
-            content = f.read()
-            for pattern, repl in rules.items():
-                content = re.sub(pattern, repl, content, flags=re.MULTILINE)
-            f.seek(0)
-            f.write(content)
-            f.truncate()
+        logfile = 'transfer_{:s}-{:s}.out'.format(d1_str, d2_str)
+        run_log = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
+
+        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {run_log:s}'
+        cmd = cmd_tmpl.format(log=logfile, job=self._transfer_job, run_log=run_log)
+        print("submitting transfer with check_call('" + cmd + "', shell=True)")
+        check_call(cmd, shell=True)
 
 
     def _build_archive_job(self):
 
-        # Shebang
-        script_str = '#!/bin/bash -l\n\n'
+        # Build archive job for output files
+        # ==================================
 
-        # Slurm options
+        # Header
+        # ------
+        script_str = '#!/bin/bash -l\n\n'
         script_str += '#SBATCH --partition=xfer\n'
         script_str += '#SBATCH --ntasks=1\n'
-        script_str += '#SBATCH --time=03:00:00\n'
+        script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
         script_str += '#SBATCH --job-name=cc2_archive\n\n'
 
-        # Case dependent environment variables
+        # Case dependent variables
+        # ------------------------
+        script_str += '# Case dependent variables\n'
+        script_str += '# ------------------------\n'
         script_str += 'CASE_NAME={:s}\n'.format(self.name)
         script_str += 'archive_dir={:s}\n'.format(os.path.join(self.archive_dir, self.name))
         script_str += 'archive_cesm={:s}\n'.format('true' if self.archive_cesm else 'false')
@@ -970,98 +1011,220 @@ class daint_case(cc2_case):
            if 'hist_fincl{:d}'.format(k) in self.nml['lnd_in']['clm_inparm']:
                stream_list += ['"h{:d}"'.format(k-1)]
         script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
+        # Archiving options
+        script_str += 'remove_originals={:s}\n'.format('true' if self.archive_rm else 'false')
+        script_str += 'compression={:s}\n'.format(self.archive_compression)
 
-        # Processing commands
-        tar_rm = '--remove-files' if self.archive_rm else ''
-        if self.archive_compression == 'none':
-            tar_ext = 'tar'
-            tar_opt = 'cf'
-        elif self.archive_compression == 'gzip':
-            tar_ext = 'tgz'
-            tar_opt = 'zcf'
-        elif self.archive_compression == 'bzip2':
-            tar_ext = 'tbz'
-            tar_opt = 'jcf'
-
+        # Main script
+        # -----------
         script_str += '''
-mkdir -p ${{archive_dir}}
-mkdir -p ${{archive_dir}}/CESM_output
+# Extract date components
+# -----------------------
+YS="${1:0:4}"
+MS=$(echo "${1:4:2}" | sed 's/^0*//')
+YE="${2:0:4}"
+ME=$(echo "${2:4:2}" | sed 's/^0*//')
 
-YS="${{1:0:4}}"
-MS=$(echo "${{1:4:2}}" | sed 's/^0*//')
-YE="${{2:0:4}}"
-ME=$(echo "${{2:4:2}}" | sed 's/^0*//')
+# Archiving options
+# -----------------
+if [[ ${compression} == "gzip" ]]; then
+    tar_ext="tar.gz"
+    tar_opt="zcf"
+elif [[ ${compression} == "bzip2" ]]; then
+    tar_ext="tar.bz2"
+    tar_opt="jcf"
+else
+    tar_ext="tar"
+    tar_opt="cf"
+fi
+
+if [[ ${remove_originals} == "true" ]]; then
+    tar_rm='--remove-files'
+else
+    tar_rm=''
+fi
+
+# Proceed to archiving
+# --------------------
+mkdir -p ${archive_dir}/COSMO_output
+mkdir -p ${archive_dir}/CESM_output
 
 for ((YYYY=YS; YYYY<=YE; YYYY++)); do
-    echo "treating year ${{YYYY}}"
+    echo "treating year ${YYYY}"
     if [[ $YYYY == $YS ]]; then m1=$MS; else m1=01; fi
     if [[ $YYYY == $YE ]]; then m2=$ME; else m2=12; fi
     for ((m=m1; m<=m2; m++)); do
-        echo "    treating month ${{m}}"
-        # Handle COSMO output
-        if ((${{#COSMO_gribouts[@]}} > 0)); then
-            YYYYMM=${{YYYY}}$(printf "%02d" ${{m}})
+        echo "    treating month ${m}"
+        # Archive COSMO output
+        if ((${#COSMO_gribouts[@]} > 0)); then
+            YYYYMM=${YYYY}$(printf "%02d" ${m})
             YYYYMMp1=$((YYYY + m/12))$(printf "%02d" $((m%12+1)))
-            for gribout in ${{COSMO_gribouts[@]}}; do
-                echo "        handling COSMO stream ${{gribout}}"
-                cd ${{gribout}}
-                arch_name=lffd${{YYYYMM}}.{ext:s}
-                files=$(find . \( \( -name "lffd${{YYYYMM}}"'*' -and -not -name "lffd${{YYYYMM}}0100"'*' \) -or -name "lffd${{YYYYMMp1}}0100"'*' \) -printf '%f\\n' | sort)
-                if (( ${{#files}} > 0 )); then
-                    echo "            preparing ${{arch_name}}"
-                    tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
-                    mkdir -p ${{archive_dir}}/${{gribout}}
-                    echo "            sending ${{arch_name}} to archive directory"
-                    rsync -ar ${{arch_name}} ${{archive_dir}}/${{gribout}}/ --remove-source-files
+            for gribout in ${COSMO_gribouts[@]}; do
+                echo "        handling COSMO stream ${gribout}"
+                gribname=$(basename ${gribout})
+                arch_name=lffd${YYYYMM}.${tar_ext}
+                files=$(find ${gribout} \( \( -name "lffd${YYYYMM}"'*' -and -not -name "lffd${YYYYMM}0100"'*' \)\\
+                             -or -name "lffd${YYYYMMp1}0100"'*' \) -printf '%f\\n' | sort)
+                if (( ${#files} > 0 )); then
+                    echo "            preparing ${arch_name}"
+                    tar -${tar_opt} ${arch_name} -C ${gribout} ${files} ${tar_rm}
+                    mkdir -p ${archive_dir}/COSMO_output/${gribname}
+                    echo "            sending ${arch_name} to archive directory"
+                    rsync -ar ${arch_name} ${archive_dir}/COSMO_output/${gribname} --remove-source-files
                 fi
-                cd - > /dev/null
             done
         fi
-        # Handle CESM output
-        if [[ ${{#CESM_hh[@]}} > 0 && ${{archive_cesm}} == "true" ]]; then
-            YYYYMM=${{YYYY}}-$(printf "%02d" ${{m}})
-            for hh in ${{CESM_hh[@]}}; do
-                echo "        handling CESM stream ${{hh}}"
-                arch_name=${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}.{ext:s}
-                files=$(find . -name "${{CASE_NAME}}.clm2.${{hh}}.${{YYYYMM}}"'*' -printf '%f\\n' | sort)
-                if (( ${{#files}} > 0 )); then
-                    echo "            preparing ${{arch_name}}"
-                    tar -{opt:s} ${{arch_name}} ${{files}} {rm:s}
-                    echo "            sending ${{arch_name}} to archive directory"
-                    rsync -ar ${{arch_name}} ${{archive_dir}}/CESM_output/ --remove-source-files
+        # Archive CESM output
+        if [[ ${#CESM_hh[@]} > 0 && ${archive_cesm} == "true" ]]; then
+            YYYYMM=${YYYY}-$(printf "%02d" ${m})
+            for hh in ${CESM_hh[@]}; do
+                echo "        handling CESM stream ${hh}"
+                arch_name=${CASE_NAME}.clm2.${hh}.${YYYYMM}.${tar_ext}
+                files=$(find . -name "${CASE_NAME}.clm2.${hh}.${YYYYMM}"'*' -printf '%f\\n' | sort)
+                if (( ${#files} > 0 )); then
+                    echo "            preparing ${arch_name}"
+                    tar -${tar_opt} ${arch_name} ${files} ${tar_rm}
+                    mkdir -p ${archive_dir}/CESM_output/${hh}
+                    echo "            sending ${arch_name} to archive directory"
+                    rsync -ar ${arch_name} ${archive_dir}/CESM_output/${hh} --remove-source-files
                 fi
             done
         fi
     done
-done'''.format(ext=tar_ext, opt=tar_opt, rm=tar_rm)
+done'''
 
-        # Write script to file
+        # Write to file
+        # -------------
         with open(os.path.join(self.path, self._archive_job), mode='w') as script:
             script.write(script_str)
 
+        # Build archive job for restart files
+        # ===================================
 
-    def _submit_run_cmd(self):
+        # Header
+        # ------
+        script_str = '#!/bin/bash -l\n\n'
+        script_str += '#SBATCH --partition=xfer\n'
+        script_str += '#SBATCH --ntasks=1\n'
+        script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
+        script_str += '#SBATCH --job-name=cc2_archive_rst\n\n'
 
-        cmd = 'sbatch ' + self._run_job
-        print('submitting run with check_call(' + cmd + ', shell=True)')
-        check_call(cmd, shell=True)
+        # Case dependent variables
+        # ------------------------
+        script_str += '# Case dependent variables\n'
+        script_str += 'CASE_NAME={:s}\n'.format(self.name)
+        script_str += 'archive_dir={:s}\n'.format(os.path.join(self.archive_dir, self.name))
+        if 'ydir_restart' in self.nml['INPUT_IO']['ioctl']:
+            COSMO_restart_dir = self.nml['INPUT_IO']['ioctl']['ydir_restart']
+        elif 'ydir_restart_in' in self.nml['INPUT_IO']['ioctl']:
+            COSMO_restart_dir = self.nml['INPUT_IO']['ioctl']['ydir_restart_in']
+        else:
+            COSMO_restart_dir = '.'
+        script_str += 'COSMO_restart_dir={:s}\n\n'.format(COSMO_restart_dir)
+        script_str += 'compression={:s}\n'.format(self.archive_compression)
+
+        # Main script
+        # -----------
+        script_str += '''
+# Extract date components
+# -----------------------
+YYYY="${1:0:4}"
+MM="${1:4:2}"
+DD="${1:6:2}"
+HH="${1:8:2}"
 
 
-    def _submit_transfer_cmd(self):
+# Archive COSMO restart file
+# --------------------------
+echo "handling COSMO restart file"
+cd ${COSMO_restart_dir}
+rst_file=lrfd${YYYY}${MM}${DD}${HH}o
 
-        cmd = 'sbatch ' + self._transfer_job
-        print('submitting transfer with check_call(' + cmd + ', shell=True)')
-        check_call(cmd, shell=True)
+# Compress rstart file
+echo "    compressing ${rst_file} if needed"
+if [[ ${compression} == "none" ]]; then
+    transfer_file=${rst_file}
+elif [[ ${compression} == "gzip" ]]; then
+    transfer_file=${rst_file}.gz
+    gzip < ${rst_file} > ${transfer_file}
+elif [[ ${compression} == "bzip2" ]]; then
+    transfer_file=${rst_file}.bz2
+    bzip2 < ${rst_file} > ${transfer_file}
+fi
+
+# Transfer file
+target_dir=${archive_dir}/COSMO_output/restart
+mkdir -p ${target_dir}
+echo "    sending ${transfer_file} to ${target_dir}"
+rsync -ar ${transfer_file} ${target_dir}
+if [[ $? == 0 && ${compression} != "none" ]]; then rm -f ${transfer_file}; fi
+
+cd - > /dev/null
+
+
+# Archive CESM restart files
+# --------------------------
+echo "handling CESM restart files"
+date=${YYYY}-${MM}-${DD}-$(printf "%05d" $(( ${HH} * 3600 )) )
+tar_name=restart_${date}.tar
+
+# Generate rpointer files
+echo "    generating rpointer files"
+tmp_dir=tmp_archive_rst_${date}
+mkdir -p ${tmp_dir}
+
+printf "%s\n%s" ${CASE_NAME}.datm.r.${date}.nc ${CASE_NAME}.datm.rs1.${date}.bin > ${tmp_dir}/rpointer.atm
+echo "${CASE_NAME}.clm2.r.${date}.nc" > ${tmp_dir}/rpointer.lnd
+echo "${CASE_NAME}.cpl.r.${date}.nc" > ${tmp_dir}/rpointer.drv
+
+# Start archive with rpointer files
+echo "    building ${tar_name}"
+tar -cf ${tar_name} -C ${tmp_dir} rpointer.*
+
+rm -rf ${tmp_dir}
+
+# Add CESM restart files
+files=$( find \( -path "./${CASE_NAME}.clm2.rh[0-6].${date}.nc"\\
+              -or -path "./${CASE_NAME}.clm2.r.${date}.nc"\\
+              -or -path "./${CASE_NAME}.cpl.r.${date}.nc"\\
+              -or -path "./${CASE_NAME}.datm.rs1.${date}.bin" \)\\
+              -printf '%f\\n' | sort )
+tar -rf ${tar_name} ${files}
+
+# Compress archive
+echo "    compressing ${tar_name} if needed"
+if [[ ${compression} == "gzip" ]]; then
+    transfer_name=${tar_name}.gz
+    gzip < ${tar_name} > ${transfer_name} && rm ${tar_name}
+elif [[ ${compression} == "bzip2" ]]; then
+    transfer_name=${tar_name}.bz2
+    bzip2 < ${tar_name} > ${transfer_name} && rm ${tar_name}
+else
+    transfer_name=${tar_name}
+fi
+
+# Transer archive
+target_dir=${archive_dir}/CESM_output/restart
+mkdir -p ${target_dir}
+echo "    transferring ${transfer_name} to ${target_dir}"
+rsync -ar ${transfer_name} ${target_dir} --remove-source-files'''
+
+        # Write to file
+        # -------------
+        with open(os.path.join(self.path, self._archive_rst_job), mode='w') as script:
+            script.write(script_str)
 
 
     def _submit_archive_cmd(self):
 
+        # Submit output archive job(s)
+        # ============================
         def _assemble_cmd_and_submit(d1, d2):
             d1_str, d2_str = d1.strftime('%Y%m'), d2.strftime('%Y%m')
             cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {d1:s} {d2:s}'
             logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
             cmd = cmd_tmpl.format(job=self._archive_job, d1=d1_str, d2=d2_str, log=logfile)
-            print('submitting archive with check_call(' + cmd + ', shell=True)')
+            print("submitting archive with check_call('" + cmd + "', shell=True)")
             check_call(cmd, shell=True)
 
         # Shift archiving period vs run period by 1 month except first and last chunks
@@ -1106,6 +1269,16 @@ done'''.format(ext=tar_ext, opt=tar_opt, rm=tar_rm)
             if proceed:
                 # Submit archive job
                 _assemble_cmd_and_submit(d1, d2)
+
+        # Submit restart archive job
+        # ==========================
+        end_date = min(self._run_end_date, self.end_date)
+        end_date_str = end_date.strftime(date_fmt['cosmo'])
+        logfile = '{:s}_{:s}.out'.format('archive_restart', end_date_str)
+        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {d:s}'
+        cmd = cmd_tmpl.format(job=self._archive_rst_job, d=end_date_str, log=logfile)
+        print("submitting restart archive with check_call('" + cmd + "', shell=True)")
+        check_call(cmd, shell=True)
 
 
     def _run_fun(self):
@@ -1184,58 +1357,40 @@ class mistral_case(cc2_case):
 
     def _build_run_job(self):
 
-        logfile = '{:s}_{:s}-{:s}.out'.format(self.name,
-                                              self._run_start_date.strftime(date_fmt['cesm']),
-                                              self._run_end_date.strftime(date_fmt['cesm']))
+        # shebang
+        script_str = '#!/usr/bin/env bash\n\n'
+
+        # slurm options
+        scripte_str +='#SBATCH --job-name={:s}\n'.format(self.name)
+        scripte_str +='#SBATCH --nodes={:d}\n'.format(self._n_nodes)
+        scripte_str +='#SBATCH --account={:s}\n'.format(self.account)
+        scripte_str +='#SBATCH --time={:s}\n'.format(self.run_time)
+        if self.partition is not None:
+            scripte_str += '#SBATCH --partition={:s}\n'.format(self.partition)
+
+        # environment variables
+        scripte_str += 'export LD_LIBRARY_PATH=/sw/rhel6-x64/netcdf/netcdf_fortran-4.4.3-parallel-openmpi2-intel14/lib/:/sw/rhel6-x64/netcdf/parallel_netcdf-1.6.1-openmpi2-intel14/lib\n\n'
+        script_str += '# Set this to avoid segmentation faults\n'
+        script_str += 'ulimit -s unlimited\n'
+        script_str += 'ulimit -a\n\n'
+        script_str += 'export OMP_NUM_THREADS=1\n\n'
+
+        # launch case
+        scripte_str += 'cc2_control_case ./{:s}\n'.format(self._xml_config)
+
         with open(os.path.join(self.path, self._run_job), mode='w') as script:
-            # shebang
-            script.write('#!/usr/bin/env bash\n')
-
-            # slurm options
-            script.write('#SBATCH --job-name={:s}\n'.format(self.name))
-            script.write('#SBATCH --nodes={:d}\n'.format(self._n_nodes))
-            script.write('#SBATCH --output={:s}\n'.format(logfile))
-            script.write('#SBATCH --error={:s}\n'.format(logfile))
-            script.write('#SBATCH --account={:s}\n'.format(self.account))
-            script.write('#SBATCH --time={:s}\n'.format(self.run_time))
-            if self.partition is not None:
-                script.write('#SBATCH --partition={:s}\n'.format(self.partition))
-            script.write('\n')
-
-            # environment variables
-            script.write('export LD_LIBRARY_PATH=/sw/rhel6-x64/netcdf/netcdf_fortran-4.4.3-parallel-openmpi2-intel14/lib/:/sw/rhel6-x64/netcdf/parallel_netcdf-1.6.1-openmpi2-intel14/lib\n')
-            script.write('\n')
-            script.write('# Set this to avoid segmentation faults\n')
-            script.write('ulimit -s unlimited\n')
-            script.write('ulimit -a\n')
-            script.write('\n')
-            script.write('export OMP_NUM_THREADS=1\n')
-            script.write('\n')
-
-            # launch case
-            script.write('cc2_control_case ./{:s}\n'.format(self._xml_config))
+            script.write(script_str)
 
 
-    def _update_run_job(self, d1, d2):
+    def _submit_run_cmd(self, d1, d2):
 
         d1_str = d1.strftime(date_fmt['cesm'])
         d2_str = d2.strftime(date_fmt['cesm'])
         logfile = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
-        rules = {'#SBATCH +--output=.*$': '#SBATCH --output={:s}'.format(logfile),
-                 '#SBATCH +--error=.*$': '#SBATCH --error={:s}'.format(logfile)}
-        with open(os.path.join(self.path, self._run_job), mode='r+') as f:
-            content = f.read()
-            for pattern, repl in rules.items():
-                content = re.sub(pattern, repl, content, flags=re.MULTILINE)
-            f.seek(0)
-            f.write(content)
-            f.truncate()
 
-
-    def _submit_run_cmd(self):
-
-        cmd = 'sbatch ' + self._run_job
-        print('submitting transfer with check_call(' + cmd + ', shell=True)')
+        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s}'
+        cmd = cmd_tmpl.format(log=logfile, job=self._run_job)
+        print("submitting run with check_call('" + cmd + "', shell=True)")
         check_call(cmd, shell=True)
 
 
