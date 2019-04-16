@@ -51,7 +51,7 @@ def create_case():
           "xml file options must be stored in a subelement of the root element tagged with 'main'.\n"\
           "and/or the specific machine (see [1]).\n"\
           "Command line arguments have precedence over xml file ones.\n"\
-          "[1] https://github.com/COSMO-RESM/COSMO_CLM2_tools/blob/master/COSMO_CLM2_tools/example_setup.xml"
+          "[1] https://github.com/COSMO-RESM/COSMO_CLM2_tools"
     parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
     parser.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
     parser.add_argument('--machine', metavar='MACH',

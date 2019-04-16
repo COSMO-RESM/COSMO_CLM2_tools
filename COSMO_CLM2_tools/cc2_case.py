@@ -264,7 +264,7 @@ class cc2_case(object):
             elif cesm_rst.endswith(('.tbz', '.tar.bz2')):
                 check_call(['tar', '-jxvf', cesm_rst, '-C', self.path])
             else:
-                check_call(['rsync', '-avL', cesm_rst_origin+'/', self.path])
+                check_call(['rsync', '-avL', cesm_rst+'/', self.path])
 
         # Set case name in namelist
         self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
