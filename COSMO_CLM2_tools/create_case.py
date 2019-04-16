@@ -117,11 +117,11 @@ def create_case():
                             "(type: bool, using anything Python can parse as a boolean, default: False)\n"
                             "Be carefull to provide a COSMO executable compiled accordingly")
     main_group.add_argument('--start_mode', action=cc2_act('main'), type=str_to_bool,
-                            choices=['startup', 'restart', 'continue'],
+                            choices=['startup', 'continue', 'restart'],
                             help="if not startup, use in conjunction with restart_date,\n"
                             "cos_rst and CESM_rst options (default: 'startup')")
     main_group.add_argument('--restart_date', action=cc2_act('main'),
-                            help=" restart date formatted as YYYY-MM-DD-HH (default: None)")
+                            help="restart date formatted as YYYY-MM-DD-HH (default: None)")
     main_group.add_argument('--cos_rst', action=cc2_act('main'),
                             help="path to the COSMO restart file. Compresed restart files\n"
                             "with extension '.gz' or '.bz2' are accepted. (default: None)")

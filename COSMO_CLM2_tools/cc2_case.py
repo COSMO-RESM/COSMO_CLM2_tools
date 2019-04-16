@@ -275,16 +275,22 @@ class cc2_case(object):
         if self.start_mode == 'startup':
             self.nml['INPUT_ORG']['runctl']['hstart'] = 0
             if not self.cosmo_only:
-                self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'startup'
                 self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self.start_date.strftime(date_fmt['cesm']))
+                self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'startup'
+            if 'nrevsn' in self.nml['lnd_in']['clm_inparm']:
+                del(self.nml['lnd_in']['clm_inparm']['nrevsn'])
         else:
             self.nml['INPUT_ORG']['runctl']['hstart'] = (self.restart_date - self.start_date).total_seconds() // 3600.0
             if not self.cosmo_only:
+                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self.restart_date.strftime(date_fmt['cesm']))
                 if self.start_mode == 'continue':
                     self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'continue'
+                    if 'nrevsn' in self.nml['lnd_in']['clm_inparm']:
+                        del(self.nml['lnd_in']['clm_inparm']['nrevsn'])
                 elif self.start_mode == 'restart':
-                    self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'branch' 
-                self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self.restart_date.strftime(date_fmt['cesm']))
+                    self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'branch'
+                    with open(os.path.join(self.path, 'rpointer.lnd')) as rpt:
+                        self.nml['lnd_in']['clm_inparm']['nrevsn'] = rpt.readline().strip()
 
 
     def _cos_input_delta_ext(self):
