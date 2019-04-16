@@ -217,8 +217,12 @@
         have the same name. Also do not modify the ~start_date~
         option, keep the original case start date and use the
         ~restart_date~ option for specifying when to continue.
-      - 'restart' is for restarting from another case, *Warning*:
-        doesn't work yet!
+      - 'restart' is for restarting from another case.
+      Use both 'continue' and 'restart' in conjunction with the
+      ~restart_date~, ~cos_rst~ and ~cesm_rst~ options. The
+      ~start_date~ option needs to correspond to the original case
+      you're continuing/restarting, use ~restart_date~ to specify when
+      to continue/restart.
     - ~--restart_date~ restart/continue date formatted as
       YYYY-MM-DD-HH
     - ~--cos_rst~ path to the COSMO restart file. Compresed restart
@@ -305,79 +309,45 @@
 *** Mistral specific options
     None so far
 
+*** Modifying a namelist from the xml configuration file
+    The idea here is that one can perform tests or sensitivity
+    analysis without touching the original project namelists. This is
+    not avialble from the command line.
+
+    Any namelist parameter can be changed by adding a <change_par>
+    node directly under the root node with attributes following this
+    example
+    #+BEGIN_SRC xml
+    <change_par file="INPUT_ORG" block="runctl" param="lreproduce" type="py_eval">True</change_par>
+    #+END_SRC
+    - The value of the node is the new value of the namelist
+      parameter.
+    - don't give the namelist file path, only the file name is needed.
+    - type attribute can be any of the valid python types or
+      "py_eval", in which case python will interpret the value. the
+      default type is string
+    - an "n" attribute starting at 1 (not 0) can also be given to
+      target one of several blocks sharing the same name in a namelist
+      file, e.g. "gribout" blocks in INPUT_IO.
+
+    In a similar way, any namelist parameter can be deleted by adding
+    an empty <del_par> node directly under the root node
+    with attributes following this example
+    #+BEGIN_SRC xml
+    <del_par file="INPUT_ORG" block="runctl" param="lreproduce" />
+    #+END_SRC
+    - don't give the namelist file path, only the file name is needed.
+    - an "n" attribute starting at 1 (not 0) can also be given to
+      target one of several blocks sharing the same name in a
+      namelist file, e.g. "gribout" blocks in INPUT_IO.
+    - Obviouly any value given to that node is ignored
+
 * Development
   In this section we describe a bit how the utility is implemented and
   how one can add options or support for a new machine.
 
 * COSMO_CLM2_tools                                                 :noexport:
   - [ ] Add doc strings
-** example_setup.xml
-   #+BEGIN_SRC xml :tangle COSMO_CLM2_tools/example_setup.xml
-     <?xml version="1.0" encoding="utf-8"?>
-     <setup>
-       <!-- main and machine specific options can also be set through the command line.
-            Command line takes precedence -->
-       <machine></machine>
-       <main>
-         <name>COSMO_CLM2</name>
-         <install_dir></install_dir>
-         <archive_dir></archive_dir>
-         <cosmo_only></cosmo_only>
-         <start_date></start_date>
-         <end_date></end_date>
-         <run_length></run_length>
-         <cos_in>./COSMO_input</cos_in>
-         <cos_nml>./COSMO_nml</cos_nml>
-         <cos_exe>./cosmo</cos_exe>
-         <cesm_in>./CESM_input</cesm_in>
-         <cesm_nml>./CESM_nml</cesm_nml>
-         <cesm_exe>./cesm.exe</cesm_exe>
-         <oas_in>./OASIS_input</oas_in>
-         <oas_nml>./OASIS_nml</oas_nml>
-         <ncosx type="int"></ncosx>
-         <ncosy type="int"></ncosy>
-         <ncosio type="int"></ncosio>
-         <ncesm type="int"></ncesm>
-         <gpu_mode type="py_eval">False</gpu_mode>
-         <dummy_day type="py_eval">False</dummy_day>
-         <transfer_all type="py_eval">False</transfer_all>
-         <input_type>file</input_type>
-       </main>
-       <daint>
-         <account></account>
-         <partition></partition>
-         <modules_opt>switch</modules_opt>
-         <pgi_version></pgi_version>
-         <shebang>#!/bin/bash</shebang>
-         <run_time>24:00:00</run_time>
-         <transfer_time>02:00:00</transfer_time>
-         <archive_time>03:00:00</archive_time>
-       </daint>
-       <mistral>
-         <account></account>
-         <partition></partition>
-         <run_time>10:00:00</run_time>
-       </mistral>
-       <!-- Any namelist parameter can be changed by adding a <change_par> node directly under the <setup> node
-            with attributes following this example
-            <change_par file="INPUT_ORG" block="runctl" param="lreproduce" type="py_eval">True</change_par>
-            - The value of the node is the new value of the namelist parameter
-            - don't give the namelist file path, only the file name is needed.
-            - type attribute can be any of the valid python types or "py_eval", in which case python
-              will interpret the value. the default type is string
-            - an "n" attribute starting at 1 (not 0) can also be given to target one of several blocks
-              sharing the same name in a namelist, e.g. "gribout" blocks in INPUT_IO.
-       -->
-       <!-- In the same way, any namelist parameter can be deleted by adding an
-            empty <del_par> node directly under the <setup> node with attributes following this example
-            <del_par file="INPUT_ORG" block="runctl" param="lreproduce" />
-            - don't give the namelist file path, only the file name is needed.
-            - an "n" attribute starting at 1 (not 0) can also be given to target one of several blocks
-              sharing the same name in a namelist, e.g. "gribout" blocks in INPUT_IO.
-            - Obviouly any value given to that node is ignored
-       -->
-     </setup>
-   #+END_SRC
 ** cc2_case.py
    :PROPERTIES:
    :header-args: :tangle COSMO_CLM2_tools/cc2_case.py :comments no
@@ -1893,7 +1863,7 @@
                 "xml file options must be stored in a subelement of the root element tagged with 'main'.\n"\
                 "and/or the specific machine (see [1]).\n"\
                 "Command line arguments have precedence over xml file ones.\n"\
-                "[1] https://github.com/COSMO-RESM/COSMO_CLM2_tools/blob/master/COSMO_CLM2_tools/example_setup.xml"
+                "[1] https://github.com/COSMO-RESM/COSMO_CLM2_tools"
           parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
           parser.add_argument('-s', '--setup-file', metavar='FILE', help="xml file conatining setup options")
           parser.add_argument('--machine', metavar='MACH',

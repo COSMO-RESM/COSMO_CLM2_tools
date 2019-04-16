@@ -1,4 +1,4 @@
-# Created 2019-04-15 Mon 17:32
+# Created 2019-04-16 Die 17:27
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -218,8 +218,12 @@ i.e. ~n_nodes * (n_tasks_per_node - 1)~
     have the same name. Also do not modify the ~start_date~
     option, keep the original case start date and use the
     ~restart_date~ option for specifying when to continue.
-  - 'restart' is for restarting from another case, *Warning*:
-    doesn't work yet!
+  - 'restart' is for restarting from another case.
+  Use both 'continue' and 'restart' in conjunction with the
+  ~restart_date~, ~cos_rst~ and ~cesm_rst~ options. The
+  ~start_date~ option needs to correspond to the original case
+  you're continuing/restarting, use ~restart_date~ to specify when
+  to continue/restart.
 - ~--restart_date~ restart/continue date formatted as
   YYYY-MM-DD-HH
 - ~--cos_rst~ path to the COSMO restart file. Compresed restart
@@ -305,6 +309,39 @@ specific node.
 
 *** Mistral specific options
 None so far
+
+*** Modifying a namelist from the xml configuration file
+The idea here is that one can perform tests or sensitivity
+analysis without touching the original project namelists. This is
+not avialble from the command line.
+
+Any namelist parameter can be changed by adding a <change_par>
+node directly under the root node with attributes following this
+example
+#+begin_src xml
+  <change_par file="INPUT_ORG" block="runctl" param="lreproduce" type="py_eval">True</change_par>
+#+end_src
+- The value of the node is the new value of the namelist
+  parameter.
+- don't give the namelist file path, only the file name is needed.
+- type attribute can be any of the valid python types or
+  "py_eval", in which case python will interpret the value. the
+  default type is string
+- an "n" attribute starting at 1 (not 0) can also be given to
+  target one of several blocks sharing the same name in a namelist
+  file, e.g. "gribout" blocks in INPUT_IO.
+
+In a similar way, any namelist parameter can be deleted by adding
+an empty <del_par> node directly under the root node
+with attributes following this example
+#+begin_src xml
+  <del_par file="INPUT_ORG" block="runctl" param="lreproduce" />
+#+end_src
+- don't give the namelist file path, only the file name is needed.
+- an "n" attribute starting at 1 (not 0) can also be given to
+  target one of several blocks sharing the same name in a
+  namelist file, e.g. "gribout" blocks in INPUT_IO.
+- Obviouly any value given to that node is ignored
 
 * Development
 In this section we describe a bit how the utility is implemented and
