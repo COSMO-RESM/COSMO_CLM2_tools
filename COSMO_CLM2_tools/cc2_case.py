@@ -89,8 +89,8 @@ class cc2_case(object):
         self.start_date = start_date
         self.restart_date = restart_date
         self.end_date = end_date
-        self.set_nml_start_parameters()
         # - ML - Some of the following is useless for transfer and archive actions
+        self._set_nml_start_parameters()
         self._compute_run_dates()   # defines _run_start_date, _run_end_date and _runtime (_end_date if needed)
         self._apply_run_dates()   # put dates and runtime in namelists objects (writing to file at the end)
         self._check_INPUT_IO()
@@ -270,7 +270,7 @@ class cc2_case(object):
         self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
 
 
-    def set_nml_start_parameters(self):
+    def _set_nml_start_parameters(self):
 
         if self.start_mode == 'startup':
             self.nml['INPUT_ORG']['runctl']['hstart'] = 0
