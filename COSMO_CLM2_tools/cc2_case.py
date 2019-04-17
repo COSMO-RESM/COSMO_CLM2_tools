@@ -80,8 +80,8 @@ class cc2_case(object):
         if self.install:
             log = 'Setting up case {:s} in {:s}'.format(self.name, self._path)
             print(log + '\n' + '-' * len(log))
-            self.install_case(cos_nml, cos_in, cos_exe, cos_rst, cesm_nml, cesm_in, cesm_exe, cesm_rst, oas_nml, oas_in)
-            self.create_missing_dirs()
+            self._install_case(cos_nml, cos_in, cos_exe, cos_rst, cesm_nml, cesm_in, cesm_exe, cesm_rst, oas_nml, oas_in)
+            self._create_missing_dirs()
         self.cos_exe = cos_exe
         if not self.cosmo_only:
             self.cesm_exe = cesm_exe
@@ -103,7 +103,7 @@ class cc2_case(object):
             if self.archive_dir is not None:
                 self._build_archive_job()
             self.to_xml()
-            self.install_input()
+            self._install_input()
         # Write modified namelists to file
         self.write_open_nml()
 
@@ -210,7 +210,7 @@ class cc2_case(object):
         tree.write(os.path.join(self.path, self._xml_config), xml_declaration=True)
 
 
-    def install_case(self, cos_nml, cos_in, cos_exe, cos_rst, cesm_nml, cesm_in, cesm_exe, cesm_rst, oas_nml, oas_in):
+    def _install_case(self, cos_nml, cos_in, cos_exe, cos_rst, cesm_nml, cesm_in, cesm_exe, cesm_rst, oas_nml, oas_in):
 
         if not os.path.exists(self.path):
             # Create case directory
@@ -338,7 +338,7 @@ class cc2_case(object):
                         self.cos_in+'/', os.path.join(self.path,'COSMO_input')])
 
 
-    def install_input(self):
+    def _install_input(self):
 
         # Get cosmo lbf input file size
         _, ext = self._cos_input_delta_ext()
@@ -591,7 +591,7 @@ class cc2_case(object):
         self.nml.write_all()
 
 
-    def create_missing_dirs(self):
+    def _create_missing_dirs(self):
 
         # COSMO
         # -----
