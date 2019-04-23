@@ -135,6 +135,10 @@ def create_case():
     main_group.add_argument('--dummy_day', action=cc2_act('main'), type=str_to_bool,
                             help="perform a dummy day run after end of simulation to get last COSMO output.\n"
                             "(type: bool, using anything Python can parse as a boolean, default: True)")
+    main_group.add_argument('--gen_oasis', action=cc2_act('main'), type=str_to_bool,
+                            help="generate OASIS auxiliary files.\n"
+                            "note that OASIS will crash after producing the files\n"
+                            "(type: bool, using anything Python can parse as a boolean, default: False)")
     main_group.add_argument('--input_type', action=cc2_act('main'), choices=['file', 'symlink'],
                             help="default: file")
     main_group.add_argument('--transfer_all', action=cc2_act('main'), type=str_to_bool,
@@ -166,12 +170,7 @@ def create_case():
 
     cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
-                                help="do not submit job after setup\n"
-                                "only command line argument, cannot be set in xml file")
-    cmd_line_group.add_argument('--gen_oasis', action='store_true',
-                                help="generate OASIS auxiliary files\n"
-                                "note that OASIS will crash after producing the files\n"
-                                "only command line argument, cannot be set in xml file\n")
+                                help="do not submit job after setup")
 
     opts = parser.parse_args()
 
@@ -194,9 +193,6 @@ def create_case():
         cc2case.submit_run()
 
 def get_case_args(cmd_opts, cc2_cmd_args):
-
-    if cmd_opts.gen_oasis:
-        cc2_cmd_args['main']['dummy_day'] = False
 
     machine = cmd_opts.machine
 

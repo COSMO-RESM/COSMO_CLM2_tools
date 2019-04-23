@@ -58,7 +58,7 @@ class cc2_case(object):
         self.name = name
         self.run_length = run_length
         self.gpu_mode = gpu_mode
-        self.dummy_day = dummy_day
+        self.dummy_day = dummy_day and not gen_oasis
         self.cosmo_only = cosmo_only
         self.gen_oasis = gen_oasis
         self.cos_in = os.path.abspath(cos_in)
@@ -242,8 +242,10 @@ class cc2_case(object):
         input_cmd = 'ln' if self.input_type == 'symlink' else 'rsync'
         self._mk_miss_path('CESM_input')
         _transfer(cos_nml)
+        _transfer(cos_exe, folder=False)
         if not self.cosmo_only:
             _transfer(cesm_nml)
+            _transfer(cesm_exe, folder=False)
             _transfer(cesm_in, target='CESM_input', command=input_cmd)
             _transfer(oas_nml)
             if not self.gen_oasis:
