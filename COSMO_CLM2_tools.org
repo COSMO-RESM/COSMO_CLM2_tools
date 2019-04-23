@@ -575,25 +575,42 @@
 
           def _install_case(self, cos_nml, cos_in, cos_exe, cos_rst, cesm_nml, cesm_in, cesm_exe, cesm_rst, oas_nml, oas_in):
 
+              def _transfer(origin, target=None, folder=True, command='rsync'):
+                  # command
+                  if command == 'rsync':
+                      cmd = 'rsync -avL --exclude=".*"'
+                  elif command == 'ln':
+                      cmd = 'ln -sf'
+                  # origin
+                  if folder:
+                      if command == 'rsync':
+                          org = os.path.abspath(origin) + '/'
+                      elif command == 'ln':
+                          org = os.path.abspath(origin) + '/*'
+                  else:
+                      org = os.path.abspath(origin)
+                  # target
+                  trg = self.path if target is None else os.path.join(self.path, target)
+                  # transfer
+                  cmd_run = '{:s} {:s} {:s}'.format(cmd, org, trg)
+                  print(cmd_run)
+                  check_call(cmd_run, shell=True)
+
+
               if not os.path.exists(self.path):
                   # Create case directory
                   os.makedirs(self.path)
 
               # Transfer everything except COSMO input files
-              check_call(['rsync', '-avrL', os.path.abspath(cos_nml)+'/', self.path])
-              check_call(['rsync', '-avrL', os.path.abspath(cos_exe), self.path])
+              input_cmd = 'ln' if self.input_type == 'symlink' else 'rsync'
+              self._mk_miss_path('CESM_input')
+              _transfer(cos_nml)
               if not self.cosmo_only:
-                  if self.input_type == 'symlink':
-                      check_call(['ln', '-sf', os.path.abspath(cesm_in), os.path.join(self.path,'CESM_input')])
-                  elif self.input_type == 'file':
-                      check_call(['rsync', '-avrL', os.path.abspath(cesm_in)+'/', os.path.join(self.path,'CESM_input')+'/'])
-                  check_call(['rsync', '-avrL', os.path.abspath(cesm_nml)+'/', self.path])
-                  check_call(['rsync', '-avrL', os.path.abspath(cesm_exe), self.path])
+                  _transfer(cesm_nml)
+                  _transfer(cesm_in, target='CESM_input', command=input_cmd)
+                  _transfer(oas_nml)
                   if not self.gen_oasis:
-                      if self.input_type == 'symlink':
-                          check_call(['ln', '-sf', os.path.abspath(oas_in), self.path])
-                      elif self.input_type == 'file':
-                          check_call(['rsync', '-avrL', os.path.abspath(oas_in)+'/', self.path])
+                      _transfer(oas_in, command=input_cmd)
                   else:
                       print('generate OASIS file:')
                       for f in os.listdir(oas_in):
@@ -602,7 +619,6 @@
                               os.remove(os.path.join(self.path, f))
                           except OSError:
                               pass
-                  check_call(['rsync', '-avrL', os.path.abspath(oas_nml)+'/', self.path])
 
               if self.start_mode != 'startup':
                   if 'ydir_restart_in' in self.nml['INPUT_IO']['ioctl']:
@@ -613,7 +629,7 @@
                       cos_rst_nml = ''
                   self._mk_miss_path(cos_rst_nml)
                   cos_rst_target = os.path.normpath(os.path.join(self.path, cos_rst_nml, os.path.basename(cos_rst)))
-                  check_call(['rsync', '-avL', cos_rst, cos_rst_target])
+                  _transfer(cos_rst, target=cos_rst_nml, folder=False)
 
                   if cos_rst.endswith('.gz'):
                       check_call(['gunzip', cos_rst_target])
@@ -677,6 +693,7 @@
                   file_name = COSMO_input_file_name(root, date, ext)
                   if os.path.exists(os.path.join(self.cos_in, file_name)):
                       if self.input_type == 'symlink':
+                          print(file_name)
                           check_call(['ln', '-sf', os.path.join(self.cos_in, file_name),
                                       os.path.join(self.path,'COSMO_input')])
                       elif self.input_type == 'file':
@@ -697,8 +714,8 @@
           def transfer_input(self):
 
               if self.input_type == 'file':
-                  check_call(['rsync', '-avrL', '--files-from', self._transfer_list,
-                              self.cos_in+'/', os.path.join(self.path,'COSMO_input')])
+                  check_call(['rsync', '-avL', '--files-from', self._transfer_list,
+                              self.cos_in, os.path.join(self.path,'COSMO_input')])
 
 
           def _install_input(self):
