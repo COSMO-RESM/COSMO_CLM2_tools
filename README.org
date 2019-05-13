@@ -1,4 +1,4 @@
-# Created 2019-04-16 Die 17:29
+# Created 2019-05-13 Mon 17:48
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -346,3 +346,16 @@ with attributes following this example
 * Development
 In this section we describe a bit how the utility is implemented and
 how one can add options or support for a new machine.
+
+** commit message tags
+taken from https://docs.scipy.org/doc/numpy/dev/gitwash/development_workflow.html
+BUG: bug fix
+DEP: deprecate something, or remove a deprecated object
+DEV: development tool or utility
+DOC: documentation
+ENH: enhancement
+MAINT: maintenance commit (refactoring, typos, etc.)
+REV: revert an earlier commit
+STY: style fix
+TST: addition or modification of tests
+REL: related to releasing
