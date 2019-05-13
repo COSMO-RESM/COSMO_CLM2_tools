@@ -1046,9 +1046,9 @@ set_status "transfer" "complete"'''
 # Extract date components
 # -----------------------
 YS="${1:0:4}"
-MS=$(echo "${1:4:2}" | sed 's/^0*//')
+MS=$(echo "${1:4:2}" | sed 's/^0//')
 YE="${2:0:4}"
-ME=$(echo "${2:4:2}" | sed 's/^0*//')
+ME=$(echo "${2:4:2}" | sed 's/^0//')
 
 # Archiving options
 # -----------------
