@@ -25,7 +25,7 @@
     and archiving output files.
   - case properties not stored in namelists (e.g. length of chunks,
     archiving options, run/transfer status etc) are written to a local
-    xml configuration file (not ot be confused with the user's xml
+    xml configuration file (not be confused with the user's xml
     setup file)
 
   The first run job is then submitted and run, transfer and archive
@@ -117,8 +117,8 @@
          <pgi_version></pgi_version>
          <shebang>#!/bin/bash</shebang>
          <run_time>24:00:00</run_time>
-         <transfer_time>02:00:00</transfer_time>
-         <archive_time>03:00:00</archive_time>
+         <pre_time>02:00:00</pre_time>
+         <post_time>03:00:00</post_time>
        </daint>
        <mistral>
          <account></account>
@@ -286,9 +286,9 @@
     these have to be put under the machine specific node.
     - ~--run_time~ reserved time for run job (default: '24:00:00' on
       daint, '08:00:00' on mistral)
-    - ~--transfer_time~ reserved time for transfer job (default:
+    - ~--pre_time~ reserved time for pre run job (default:
       '02:00:00')
-    - ~--archive_time~ reserved time for archive job (default:
+    - ~--post_time~ reserved time for post run job (default:
       '03:00:00')
 
 *** SLURM options
@@ -411,8 +411,8 @@
           _default_install_dir = None
           _control_job = 'cc2_control_job'
           _run_job = 'cc2_run_job'
-          _transfer_job = 'cc2_transfer_job'
-          _archive_job = 'cc2_archive_job'
+          _pre_run_job = 'cc2_pre_run_job'
+          _post_run_job = 'cc2_post_run_job'
           _xml_config = 'cc2_config.xml'
           _transfer_list = 'cc2_transfer_list'
           NotImplementedMessage = "required method {:s} not implemented by class {:s}.\n" \
@@ -1195,11 +1195,11 @@
 
           def __init__(self, run_time='24:00:00', account=None, partition=None,
                        shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
-                       transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
+                       pre_time='02:00:00', post_time='03:00:00', **base_case_args):
 
               self.run_time = run_time
-              self.transfer_time = transfer_time
-              self.archive_time = archive_time
+              self.pre_time = pre_time
+              self.post_time = post_time
               self.account = account
               self.modules_opt = modules_opt
               self.pgi_version = pgi_version
@@ -1319,7 +1319,7 @@
               script_str = '#!/bin/bash -l\n\n'
               script_str += '#SBATCH --partition=xfer\n'
               script_str += '#SBATCH --ntasks=1\n'
-              script_str += '#SBATCH --time={:s}\n'.format(self.transfer_time)
+              script_str += '#SBATCH --time={:s}\n'.format(self.pre_time)
               script_str += '#SBATCH --job-name=cc2_transfer\n\n'
 
               # Case dependent variables
@@ -1368,7 +1368,7 @@
 
               # Write to file
               # -------------
-              with open(os.path.join(self.path, self._transfer_job), mode='w') as script:
+              with open(os.path.join(self.path, self._pre_run_job), mode='w') as script:
                   script.write(script_str)
 
 
@@ -1376,11 +1376,11 @@
 
               d1_str = d1.strftime(date_fmt['cesm'])
               d2_str = d2.strftime(date_fmt['cesm'])
-              logfile = 'transfer_{:s}-{:s}.out'.format(d1_str, d2_str)
+              logfile = 'pre_run_{:s}-{:s}.out'.format(d1_str, d2_str)
               run_log = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
 
               cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {run_log:s}'
-              cmd = cmd_tmpl.format(log=logfile, job=self._transfer_job, run_log=run_log)
+              cmd = cmd_tmpl.format(log=logfile, job=self._pre_run_job, run_log=run_log)
               print("submitting transfer with check_call('" + cmd + "', shell=True)")
               check_call(cmd, shell=True)
 
@@ -1395,7 +1395,7 @@
               script_str = '#!/bin/bash -l\n\n'
               script_str += '#SBATCH --partition=xfer\n'
               script_str += '#SBATCH --ntasks=1\n'
-              script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
+              script_str += '#SBATCH --time={:s}\n'.format(self.post_time)
               script_str += '#SBATCH --job-name=cc2_archive\n\n'
 
               # Case dependent variables
@@ -1498,7 +1498,7 @@
 
               # Write to file
               # -------------
-              with open(os.path.join(self.path, self._archive_job), mode='w') as script:
+              with open(os.path.join(self.path, self._post_run_job), mode='w') as script:
                   script.write(script_str)
 
               # Build archive job for restart files
@@ -1509,7 +1509,7 @@
               script_str = '#!/bin/bash -l\n\n'
               script_str += '#SBATCH --partition=xfer\n'
               script_str += '#SBATCH --ntasks=1\n'
-              script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
+              script_str += '#SBATCH --time={:s}\n'.format(self.post_time)
               script_str += '#SBATCH --job-name=cc2_archive_rst\n\n'
 
               # Case dependent variables
@@ -1626,7 +1626,7 @@
                   d1_str, d2_str = d1.strftime('%Y%m'), d2.strftime('%Y%m')
                   cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {d1:s} {d2:s}'
                   logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
-                  cmd = cmd_tmpl.format(job=self._archive_job, d1=d1_str, d2=d2_str, log=logfile)
+                  cmd = cmd_tmpl.format(job=self._post_run_job, d1=d1_str, d2=d2_str, log=logfile)
                   print("submitting archive with check_call('" + cmd + "', shell=True)")
                   check_call(cmd, shell=True)
 
@@ -1744,7 +1744,7 @@
 
 
           def __init__(self, run_time='08:00:00', account=None, partition=None,
-                       transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
+                       pre_time='02:00:00', post_time='03:00:00', **base_case_args):
 
               self.run_time = run_time
               self.account = account
@@ -1994,10 +1994,10 @@
           slurm_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
                                   help="reserved time for run job\n"
                                   "(default: '24:00:00' on daint, '08:00:00' on mistral)")
-          slurm_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
-                                  help="reserved time for transfer job (default: '02:00:00')")
-          slurm_group.add_argument('--archive_time', action=cc2_act('daint', 'mistral'),
-                                  help="reserved time for archive job (default: '03:00:00')")
+          slurm_group.add_argument('--pre_time', action=cc2_act('daint', 'mistral'),
+                                  help="reserved time for pre run job (default: '02:00:00')")
+          slurm_group.add_argument('--post_time', action=cc2_act('daint', 'mistral'),
+                                  help="reserved time for post run job (default: '03:00:00')")
           slurm_group.add_argument('--account', action=cc2_act('daint', 'mistral'),
                                    help="account to use for batch script\n"
                                    "(default: infered from $PROJECT on daint, None on mistral)")

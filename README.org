@@ -1,4 +1,4 @@
-# Created 2019-05-13 Mon 17:48
+# Created 2019-06-17 Mon 10:00
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -26,7 +26,7 @@ file. During case creation, the following steps occur:
   and archiving output files.
 - case properties not stored in namelists (e.g. length of chunks,
   archiving options, run/transfer status etc) are written to a local
-  xml configuration file (not ot be confused with the user's xml
+  xml configuration file (not be confused with the user's xml
   setup file)
 
 The first run job is then submitted and run, transfer and archive
@@ -118,8 +118,8 @@ different nodes in the xml setup file:
       <pgi_version></pgi_version>
       <shebang>#!/bin/bash</shebang>
       <run_time>24:00:00</run_time>
-      <transfer_time>02:00:00</transfer_time>
-      <archive_time>03:00:00</archive_time>
+      <pre_time>02:00:00</pre_time>
+      <post_time>03:00:00</post_time>
     </daint>
     <mistral>
       <account></account>
@@ -287,9 +287,9 @@ Options for the scheduling system. In the xml configuration file,
 these have to be put under the machine specific node.
 - ~--run_time~ reserved time for run job (default: '24:00:00' on
   daint, '08:00:00' on mistral)
-- ~--transfer_time~ reserved time for transfer job (default:
+- ~--pre_time~ reserved time for pre run job (default:
   '02:00:00')
-- ~--archive_time~ reserved time for archive job (default:
+- ~--post_time~ reserved time for post run job (default:
   '03:00:00')
 
 *** SLURM options
