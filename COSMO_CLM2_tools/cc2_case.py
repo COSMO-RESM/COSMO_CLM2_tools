@@ -432,7 +432,7 @@ class cc2_case(object):
             if 'ccsm_pes' in self.nml['drv_in']:
                 pes_nml = self.nml['drv_in']['ccsm_pes']
             else:
-                pes_nml = self.nml['drv_in']['cesm_pes']
+                pes_nml = self.nml['drv_in']['cime_pes']
             if self.gpu_mode:   # Populate nodes with CESM tasks except one
                 self._n_nodes = self._ncos
                 self._ncesm = self._n_nodes * (self._n_tasks_per_node - 1)
