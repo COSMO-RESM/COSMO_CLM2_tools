@@ -150,10 +150,10 @@ def create_case():
     slurm_group.add_argument('--run_time', action=cc2_act('daint', 'mistral'),
                             help="reserved time for run job\n"
                             "(default: '24:00:00' on daint, '08:00:00' on mistral)")
-    slurm_group.add_argument('--transfer_time', action=cc2_act('daint', 'mistral'),
-                            help="reserved time for transfer job (default: '02:00:00')")
-    slurm_group.add_argument('--archive_time', action=cc2_act('daint', 'mistral'),
-                            help="reserved time for archive job (default: '03:00:00')")
+    slurm_group.add_argument('--pre_time', action=cc2_act('daint', 'mistral'),
+                            help="reserved time for pre run job (default: '02:00:00')")
+    slurm_group.add_argument('--post_time', action=cc2_act('daint', 'mistral'),
+                            help="reserved time for post run job (default: '03:00:00')")
     slurm_group.add_argument('--account', action=cc2_act('daint', 'mistral'),
                              help="account to use for batch script\n"
                              "(default: infered from $PROJECT on daint, None on mistral)")

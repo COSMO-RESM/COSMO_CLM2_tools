@@ -35,8 +35,8 @@ class cc2_case(object):
     _default_install_dir = None
     _control_job = 'cc2_control_job'
     _run_job = 'cc2_run_job'
-    _transfer_job = 'cc2_transfer_job'
-    _archive_job = 'cc2_archive_job'
+    _pre_run_job = 'cc2_pre_run_job'
+    _post_run_job = 'cc2_post_run_job'
     _xml_config = 'cc2_config.xml'
     _transfer_list = 'cc2_transfer_list'
     NotImplementedMessage = "required method {:s} not implemented by class {:s}.\n" \
@@ -817,11 +817,11 @@ class daint_case(cc2_case):
 
     def __init__(self, run_time='24:00:00', account=None, partition=None,
                  shebang='#!/bin/bash', modules_opt='switch', pgi_version=None,
-                 transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
+                 pre_time='02:00:00', post_time='03:00:00', **base_case_args):
 
         self.run_time = run_time
-        self.transfer_time = transfer_time
-        self.archive_time = archive_time
+        self.pre_time = pre_time
+        self.post_time = post_time
         self.account = account
         self.modules_opt = modules_opt
         self.pgi_version = pgi_version
@@ -941,7 +941,7 @@ export MPICH_G2G_PIPELINE=256
         script_str = '#!/bin/bash -l\n\n'
         script_str += '#SBATCH --partition=xfer\n'
         script_str += '#SBATCH --ntasks=1\n'
-        script_str += '#SBATCH --time={:s}\n'.format(self.transfer_time)
+        script_str += '#SBATCH --time={:s}\n'.format(self.pre_time)
         script_str += '#SBATCH --job-name=cc2_transfer\n\n'
 
         # Case dependent variables
@@ -990,7 +990,7 @@ set_status "transfer" "complete"'''
 
         # Write to file
         # -------------
-        with open(os.path.join(self.path, self._transfer_job), mode='w') as script:
+        with open(os.path.join(self.path, self._pre_run_job), mode='w') as script:
             script.write(script_str)
 
 
@@ -998,11 +998,11 @@ set_status "transfer" "complete"'''
 
         d1_str = d1.strftime(date_fmt['cesm'])
         d2_str = d2.strftime(date_fmt['cesm'])
-        logfile = 'transfer_{:s}-{:s}.out'.format(d1_str, d2_str)
+        logfile = 'pre_run_{:s}-{:s}.out'.format(d1_str, d2_str)
         run_log = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
 
         cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {run_log:s}'
-        cmd = cmd_tmpl.format(log=logfile, job=self._transfer_job, run_log=run_log)
+        cmd = cmd_tmpl.format(log=logfile, job=self._pre_run_job, run_log=run_log)
         print("submitting transfer with check_call('" + cmd + "', shell=True)")
         check_call(cmd, shell=True)
 
@@ -1017,7 +1017,7 @@ set_status "transfer" "complete"'''
         script_str = '#!/bin/bash -l\n\n'
         script_str += '#SBATCH --partition=xfer\n'
         script_str += '#SBATCH --ntasks=1\n'
-        script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
+        script_str += '#SBATCH --time={:s}\n'.format(self.post_time)
         script_str += '#SBATCH --job-name=cc2_archive\n\n'
 
         # Case dependent variables
@@ -1120,7 +1120,7 @@ done'''
 
         # Write to file
         # -------------
-        with open(os.path.join(self.path, self._archive_job), mode='w') as script:
+        with open(os.path.join(self.path, self._post_run_job), mode='w') as script:
             script.write(script_str)
 
         # Build archive job for restart files
@@ -1131,7 +1131,7 @@ done'''
         script_str = '#!/bin/bash -l\n\n'
         script_str += '#SBATCH --partition=xfer\n'
         script_str += '#SBATCH --ntasks=1\n'
-        script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
+        script_str += '#SBATCH --time={:s}\n'.format(self.post_time)
         script_str += '#SBATCH --job-name=cc2_archive_rst\n\n'
 
         # Case dependent variables
@@ -1248,7 +1248,7 @@ rsync -ar ${transfer_name} ${target_dir} --remove-source-files'''
             d1_str, d2_str = d1.strftime('%Y%m'), d2.strftime('%Y%m')
             cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {d1:s} {d2:s}'
             logfile = '{:s}_{:s}-{:s}.out'.format('archive', d1_str, d2_str)
-            cmd = cmd_tmpl.format(job=self._archive_job, d1=d1_str, d2=d2_str, log=logfile)
+            cmd = cmd_tmpl.format(job=self._post_run_job, d1=d1_str, d2=d2_str, log=logfile)
             print("submitting archive with check_call('" + cmd + "', shell=True)")
             check_call(cmd, shell=True)
 
@@ -1362,7 +1362,7 @@ class mistral_case(cc2_case):
 
 
     def __init__(self, run_time='08:00:00', account=None, partition=None,
-                 transfer_time='02:00:00', archive_time='03:00:00', **base_case_args):
+                 pre_time='02:00:00', post_time='03:00:00', **base_case_args):
 
         self.run_time = run_time
         self.account = account

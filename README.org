@@ -1,4 +1,4 @@
-# Created 2019-06-17 Mon 10:00
+# Created 2019-06-17 Mon 10:12
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -94,6 +94,7 @@ different nodes in the xml setup file:
       <start_date></start_date>
       <end_date></end_date>
       <run_length></run_length>
+      <start_mode></start_mode>
       <cos_in>./COSMO_input</cos_in>
       <cos_nml>./COSMO_nml</cos_nml>
       <cos_exe>./cosmo</cos_exe>
