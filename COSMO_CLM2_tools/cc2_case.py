@@ -429,12 +429,16 @@ class cc2_case(object):
             else:
                 self._n_nodes = self._ncos // self._n_tasks_per_node
         else:
+            if 'ccsm_pes' in self.nml['drv_in']:
+                pes_nml = self.nml['drv_in']['ccsm_pes']
+            else:
+                pes_nml = self.nml['drv_in']['cesm_pes']
             if self.gpu_mode:   # Populate nodes with CESM tasks except one
                 self._n_nodes = self._ncos
                 self._ncesm = self._n_nodes * (self._n_tasks_per_node - 1)
             else:   # Determine number of CESM tasks and deduce number of nodes
                 if ncesm is None:
-                    self._ncesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
+                    self._ncesm = pes_nml['lnd_ntasks']
                 else:
                     self._ncesm = ncesm
                 ntot = self._ncos + self._ncesm
@@ -444,9 +448,9 @@ class cc2_case(object):
                 self._n_nodes = ntot // self._n_tasks_per_node
             # Apply number of CESM tasks to all relevant namelist parameters
             for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
-                self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
+                pes_nml['{:s}_ntasks'.format(comp)] = self._ncesm
             if self.gen_oasis:
-                self.nml['drv_in']['ccsm_pes']['atm_ntasks'] = 1
+                pes_nml['atm_ntasks'] = 1
 
 
     def _compute_run_dates(self):
