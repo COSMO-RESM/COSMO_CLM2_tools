@@ -549,6 +549,7 @@ class cc2_case(object):
             drv_in['seq_timemgr_inparm']['stop_n'] = int(runtime_seconds)
             drv_in['seq_timemgr_inparm']['stop_option'] = 'nseconds'
             drv_in['seq_timemgr_inparm']['calendar'] = 'GREGORIAN'
+            drv_in['seq_timemgr_inparm']['restart_option'] = 'nseconds'
             if self._run_end_date > self.end_date:
                 # ensure restart for the real end date, not after the dummy day
                 drv_in['seq_timemgr_inparm']['restart_n'] = int(runtime_seconds)-86400
