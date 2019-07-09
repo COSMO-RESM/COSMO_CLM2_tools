@@ -245,8 +245,8 @@ i.e. ~n_nodes * (n_tasks_per_node - 1)~
   line only option, cannot be set in the setup file. Usually this 
   option should be used twice when a new domain is used: 1) create
   mask_clm.nc to reshape mask in cesm input files. This requires 
-  compiling both executables with IOASISDEBUGLVL = 2; 
-  2) create final OASIS files (IOASISDEBUGLVL = 0)
+  compiling both executables with IOASISDEBUGLVL = 2; 2) create 
+  final OASIS files (IOASISDEBUGLVL = 0)
 - ~--no_submit~ do not submit job after case install. This is
   useful for debug or check but also if one needs to modify the
   run, transfer or archive job scripts. The case can then be
