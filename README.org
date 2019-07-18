@@ -1,4 +1,4 @@
-# Created 2019-04-16 Die 17:29
+# Created 2019-07-18 Thu 14:21
 #+TITLE: COSMO_CLM^2 tools
 #+AUTHOR: Matthieu Leclair
 #+export_file_name: README
@@ -242,10 +242,10 @@ i.e. ~n_nodes * (n_tasks_per_node - 1)~
 - ~--gen_oasis~ generate OASIS auxiliary files. The simulation
   will crash after generating these files. This is normal, just
   transfer the new files back where you need. This is a command
-  line only option, cannot be set in the setup file. Usually this 
+  line only option, cannot be set in the setup file. Usually this
   option should be used twice when a new domain is used: 1) create
-  mask_clm.nc to reshape mask in cesm input files. This requires 
-  compiling both executables with IOASISDEBUGLVL = 2; 2) create 
+  mask_clm.nc to reshape mask in cesm input files. This requires
+  compiling both executables with IOASISDEBUGLVL = 2; 2) create
   final OASIS files (IOASISDEBUGLVL = 0)
 - ~--no_submit~ do not submit job after case install. This is
   useful for debug or check but also if one needs to modify the

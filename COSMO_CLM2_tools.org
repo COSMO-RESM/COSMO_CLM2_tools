@@ -241,7 +241,11 @@
     - ~--gen_oasis~ generate OASIS auxiliary files. The simulation
       will crash after generating these files. This is normal, just
       transfer the new files back where you need. This is a command
-      line only option, cannot be set in the setup file.
+      line only option, cannot be set in the setup file. Usually this
+      option should be used twice when a new domain is used: 1) create
+      mask_clm.nc to reshape mask in cesm input files. This requires
+      compiling both executables with IOASISDEBUGLVL = 2; 2) create
+      final OASIS files (IOASISDEBUGLVL = 0)
     - ~--no_submit~ do not submit job after case install. This is
       useful for debug or check but also if one needs to modify the
       run, transfer or archive job scripts. The case can then be
@@ -2456,3 +2460,5 @@
 ** TODO CESM date settings
    Document changes about stop_option anb clanedar parameters in the
    drv_in namelist
+** TODO OASIS restarts
+   In case of asynchronous run, copy/archive these 2 files: cosmo.nc anc clm.nc
