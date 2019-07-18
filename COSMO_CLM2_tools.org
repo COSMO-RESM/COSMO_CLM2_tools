@@ -638,17 +638,19 @@
                   elif cos_rst.endswith('.bz2'):
                       check_call(['bzip2', cos_rst_target])
 
-                  if cesm_rst.endswith('.tar'):
-                      check_call(['tar', '-xvf', cesm_rst, '-C', self.path])
-                  elif cesm_rst.endswith(('.tgz', '.tar.gz')):
-                      check_call(['tar', '-zxvf', cesm_rst, '-C', self.path])
-                  elif cesm_rst.endswith(('.tbz', '.tar.bz2')):
-                      check_call(['tar', '-jxvf', cesm_rst, '-C', self.path])
-                  else:
-                      check_call(['rsync', '-avL', cesm_rst+'/', self.path])
+                  if not self.cosmo_only:
+                      if cesm_rst.endswith('.tar'):
+                          check_call(['tar', '-xvf', cesm_rst, '-C', self.path])
+                      elif cesm_rst.endswith(('.tgz', '.tar.gz')):
+                          check_call(['tar', '-zxvf', cesm_rst, '-C', self.path])
+                      elif cesm_rst.endswith(('.tbz', '.tar.bz2')):
+                          check_call(['tar', '-jxvf', cesm_rst, '-C', self.path])
+                      else:
+                          check_call(['rsync', '-avL', cesm_rst+'/', self.path])
 
               # Set case name in namelist
-              self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
+              if not self.cosmo_only:
+                  self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
 
 
           def _set_nml_start_parameters(self):
@@ -658,8 +660,8 @@
                   if not self.cosmo_only:
                       self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self.start_date.strftime(date_fmt['cesm']))
                       self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'startup'
-                  if 'nrevsn' in self.nml['lnd_in']['clm_inparm']:
-                      del(self.nml['lnd_in']['clm_inparm']['nrevsn'])
+                      if 'nrevsn' in self.nml['lnd_in']['clm_inparm']:
+                          del(self.nml['lnd_in']['clm_inparm']['nrevsn'])
               else:
                   self.nml['INPUT_ORG']['runctl']['hstart'] = (self.restart_date - self.start_date).total_seconds() // 3600.0
                   if not self.cosmo_only:
@@ -1403,11 +1405,12 @@
               stream_list = ['"{:s}"'.format(os.path.normpath(gribout['ydir'])) for gribout in self._get_gribouts()]
               script_str += 'COSMO_gribouts=({:s})\n'.format(' '.join(stream_list))
               # CESM output streams
-              stream_list = ['"h0"']
-              for k in range(2,7):
-                 if 'hist_fincl{:d}'.format(k) in self.nml['lnd_in']['clm_inparm']:
-                     stream_list += ['"h{:d}"'.format(k-1)]
-              script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
+              if not self.cosmo_only:
+                  stream_list = ['"h0"']
+                  for k in range(2,7):
+                     if 'hist_fincl{:d}'.format(k) in self.nml['lnd_in']['clm_inparm']:
+                         stream_list += ['"h{:d}"'.format(k-1)]
+                  script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
               # Archiving options
               script_str += 'remove_originals={:s}\n'.format('true' if self.archive_rm else 'false')
               script_str += 'compression={:s}\n'.format(self.archive_compression)
