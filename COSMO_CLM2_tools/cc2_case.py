@@ -364,7 +364,8 @@ class cc2_case(object):
 
         # Get cosmo lbf input file size
         _, ext = self._cos_input_delta_ext()
-        file_name = COSMO_input_file_name('lbfd', self.start_date, ext)
+        file_root = 'laf' if self.nml['INPUT_IO']['gribin']['lbdana'] else 'lbfd'
+        file_name = COSMO_input_file_name(file_root, self.start_date, ext)
         file_path = os.path.join(self.cos_in, file_name)
         self.cos_in_file_size = os.stat(file_path).st_size
 
@@ -390,8 +391,9 @@ class cc2_case(object):
         delta, ext = self._cos_input_delta_ext()
         cur_date = start_date
         cos_in_file_size = self.cos_in_file_size # get from xml once for all
+        file_root = 'laf' if self.nml['INPUT_IO']['gribin']['lbdana'] else 'lbfd'
         while cur_date <= end_date:
-            file_name = COSMO_input_file_name('lbfd', cur_date, ext)
+            file_name = COSMO_input_file_name(file_root, cur_date, ext)
             file_path = os.path.join(self.path, 'COSMO_input', file_name)
             if not os.path.exists(file_path):
                 raise ValueError("COSMO input file {:s} missing".format(file_name))
