@@ -347,8 +347,9 @@ class cc2_case(object):
             if initial:
                 _check_add_file('laf', start_date, t_list)
             cur_date = start_date
+            file_root = 'laf' if self.nml['INPUT_IO']['gribin']['lbdana'] else 'lbfd'
             while cur_date <= end_date:
-                _check_add_file('lbfd', cur_date, t_list)
+                _check_add_file(file_root, cur_date, t_list)
                 cur_date += delta
 
 

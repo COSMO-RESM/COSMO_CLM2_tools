@@ -714,8 +714,9 @@
                   if initial:
                       _check_add_file('laf', start_date, t_list)
                   cur_date = start_date
+                  file_root = 'laf' if self.nml['INPUT_IO']['gribin']['lbdana'] else 'lbfd'
                   while cur_date <= end_date:
-                      _check_add_file('lbfd', cur_date, t_list)
+                      _check_add_file(file_root, cur_date, t_list)
                       cur_date += delta
 
 
@@ -2458,7 +2459,7 @@
 * Notes                                                            :noexport:
 ** DONE Enable COSMO only                                               :dev:
 ** TODO CESM date settings
-   Document changes about stop_option anb clanedar parameters in the
+   Document changes about stop_option anb calendar parameters in the
    drv_in namelist
 ** TODO OASIS restarts
    In case of asynchronous run, copy/archive these 2 files: cosmo.nc anc clm.nc
