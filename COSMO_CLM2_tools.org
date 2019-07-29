@@ -895,6 +895,10 @@
               nstart = start_seconds // dt - 1
               hstop = hstart + runtime_hours
               nstop = (start_seconds + runtime_seconds) // dt
+              nhour_restart = int(hstop)
+              # ensure restart for the real end date, not after the dummy day
+              if self._run_end_date > self.end_date:
+                  nhour_restart -= 24
 
 
               # adapt INPUT_ORG
@@ -908,11 +912,7 @@
                       gribout['hcomb'][0:2] = hstart, hstop
                   elif 'ncomb' in gribout:
                       gribout['ncomb'][0:2] = nstart, nstop
-              if self._run_end_date > self.end_date:
-                  # ensure restart for the real end date, not after the dummy day
-                  INPUT_IO['ioctl']['nhour_restart'] = [int(hstop)-24, int(hstop)-24, 24]
-              else:
-                  INPUT_IO['ioctl']['nhour_restart'] = [int(hstop), int(hstop), 24]
+              INPUT_IO['ioctl']['nhour_restart'] = [nhour_restart, nhour_restart, 24]
 
               if not self.cosmo_only:
                   # adapt drv_in
