@@ -959,6 +959,7 @@ export MPICH_G2G_PIPELINE=256
         script_str += '# Case dependent variables\n'
         script_str += '# ------------------------\n'
         script_str += 'run_job={:s}\n'.format(self._run_job)
+        script_str += 'case_name={:s}\n'..format(self.name)
         script_str += 'xml_config={:s}\n'.format(self._xml_config)
         script_str += 'cos_in_origin={:s}\n'.format(self.cos_in)
         script_str += 'cos_in_target={:s}\n'.format(os.path.join(self.path,'COSMO_input'))
@@ -988,10 +989,13 @@ rsync -avrL --files-from ${transfer_list} ${cos_in_origin} ${cos_in_target}
 
 # Submit next run
 # ---------------
+# - ML - $1 and $2 positional arguments are start and end transfer dates formatted as YYYMMDD
+outfile=$case_name_$1-$2
 if [[ $(get_status "run") == "complete" ]]; then
     set_status "run" "submitted"
+    # - ML - use this in case the present job is running on the xfer queue
     unset SLURM_MEM_PER_CPU
-    sbatch --output $1 --error $1 ${run_job}
+    sbatch --output $outfile --error $outfile ${run_job}
 fi
 
 # Set transfer status
@@ -1009,10 +1013,11 @@ set_status "transfer" "complete"'''
         d1_str = d1.strftime(date_fmt['cesm'])
         d2_str = d2.strftime(date_fmt['cesm'])
         logfile = 'transfer_{:s}-{:s}.out'.format(d1_str, d2_str)
-        run_log = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
 
-        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {run_log:s}'
-        cmd = cmd_tmpl.format(log=logfile, job=self._transfer_job, run_log=run_log)
+        # - ML - adding d1 and d2 as positionnal arguments in case a
+        #        user needs it in a modified transfer job
+        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {d1:s} {d2:s}'
+        cmd = cmd_tmpl.format(log=logfile, job=self._transfer_job, d1=d1_str, d2=d2_str)
         print("submitting transfer with check_call('" + cmd + "', shell=True)")
         check_call(cmd, shell=True)
 
