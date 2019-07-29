@@ -534,8 +534,6 @@ class cc2_case(object):
         if 'hstop' in INPUT_ORG['runctl']:
             del INPUT_ORG['runctl']['hstop']
         INPUT_ORG['runctl']['nstop'] = nstop - 1
-        if 'hstop' in INPUT_ORG['runctl']:
-            del INPUT_ORG['runctl']['hstop']
 
         # adapt INPUT_IO
         for gribout in self._get_gribouts():
