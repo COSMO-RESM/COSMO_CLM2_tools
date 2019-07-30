@@ -1103,7 +1103,7 @@ for ((YYYY=YS; YYYY<=YE; YYYY++)); do
             for gribout in ${COSMO_gribouts[@]}; do
                 echo "        handling COSMO stream ${gribout}"
                 gribname=$(basename ${gribout})
-                arch_name=lffd${YYYYMM}.${tar_ext}
+                arch_name=lffd_${gribname}_${YYYYMM}.${tar_ext}
                 files=$(find ${gribout} \( \( -name "lffd${YYYYMM}"'*' -and -not -name "lffd${YYYYMM}0100"'*' \)\\
                              -or -name "lffd${YYYYMMp1}0100"'*' \) -printf '%f\\n' | sort)
                 if (( ${#files} > 0 )); then
