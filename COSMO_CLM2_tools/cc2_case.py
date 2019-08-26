@@ -959,7 +959,7 @@ export MPICH_G2G_PIPELINE=256
         script_str += '# Case dependent variables\n'
         script_str += '# ------------------------\n'
         script_str += 'run_job={:s}\n'.format(self._run_job)
-        script_str += 'case_name={:s}\n'..format(self.name)
+        script_str += 'case_name={:s}\n'.format(self.name)
         script_str += 'xml_config={:s}\n'.format(self._xml_config)
         script_str += 'cos_in_origin={:s}\n'.format(self.cos_in)
         script_str += 'cos_in_target={:s}\n'.format(os.path.join(self.path,'COSMO_input'))
