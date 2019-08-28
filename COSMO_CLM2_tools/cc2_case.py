@@ -275,17 +275,19 @@ class cc2_case(object):
             elif cos_rst.endswith('.bz2'):
                 check_call(['bzip2', cos_rst_target])
 
-            if cesm_rst.endswith('.tar'):
-                check_call(['tar', '-xvf', cesm_rst, '-C', self.path])
-            elif cesm_rst.endswith(('.tgz', '.tar.gz')):
-                check_call(['tar', '-zxvf', cesm_rst, '-C', self.path])
-            elif cesm_rst.endswith(('.tbz', '.tar.bz2')):
-                check_call(['tar', '-jxvf', cesm_rst, '-C', self.path])
-            else:
-                check_call(['rsync', '-avL', cesm_rst+'/', self.path])
+            if not self.cosmo_only:
+                if cesm_rst.endswith('.tar'):
+                    check_call(['tar', '-xvf', cesm_rst, '-C', self.path])
+                elif cesm_rst.endswith(('.tgz', '.tar.gz')):
+                    check_call(['tar', '-zxvf', cesm_rst, '-C', self.path])
+                elif cesm_rst.endswith(('.tbz', '.tar.bz2')):
+                    check_call(['tar', '-jxvf', cesm_rst, '-C', self.path])
+                else:
+                    check_call(['rsync', '-avL', cesm_rst+'/', self.path])
 
         # Set case name in namelist
-        self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
+        if not self.cosmo_only:
+            self.nml['drv_in']['seq_infodata_inparm']['case_name'] = self.name
 
 
     def _set_nml_start_parameters(self):
@@ -295,8 +297,8 @@ class cc2_case(object):
             if not self.cosmo_only:
                 self.nml['drv_in']['seq_timemgr_inparm']['start_ymd'] = int(self.start_date.strftime(date_fmt['cesm']))
                 self.nml['drv_in']['seq_infodata_inparm']['start_type'] = 'startup'
-            if 'nrevsn' in self.nml['lnd_in']['clm_inparm']:
-                del(self.nml['lnd_in']['clm_inparm']['nrevsn'])
+                if 'nrevsn' in self.nml['lnd_in']['clm_inparm']:
+                    del(self.nml['lnd_in']['clm_inparm']['nrevsn'])
         else:
             self.nml['INPUT_ORG']['runctl']['hstart'] = (self.restart_date - self.start_date).total_seconds() // 3600.0
             if not self.cosmo_only:
@@ -345,8 +347,9 @@ class cc2_case(object):
             if initial:
                 _check_add_file('laf', start_date, t_list)
             cur_date = start_date
+            file_root = 'laf' if self.nml['INPUT_IO']['gribin']['lbdana'] else 'lbfd'
             while cur_date <= end_date:
-                _check_add_file('lbfd', cur_date, t_list)
+                _check_add_file(file_root, cur_date, t_list)
                 cur_date += delta
 
 
@@ -361,7 +364,8 @@ class cc2_case(object):
 
         # Get cosmo lbf input file size
         _, ext = self._cos_input_delta_ext()
-        file_name = COSMO_input_file_name('lbfd', self.start_date, ext)
+        file_root = 'laf' if self.nml['INPUT_IO']['gribin']['lbdana'] else 'lbfd'
+        file_name = COSMO_input_file_name(file_root, self.start_date, ext)
         file_path = os.path.join(self.cos_in, file_name)
         self.cos_in_file_size = os.stat(file_path).st_size
 
@@ -387,8 +391,9 @@ class cc2_case(object):
         delta, ext = self._cos_input_delta_ext()
         cur_date = start_date
         cos_in_file_size = self.cos_in_file_size # get from xml once for all
+        file_root = 'laf' if self.nml['INPUT_IO']['gribin']['lbdana'] else 'lbfd'
         while cur_date <= end_date:
-            file_name = COSMO_input_file_name('lbfd', cur_date, ext)
+            file_name = COSMO_input_file_name(file_root, cur_date, ext)
             file_path = os.path.join(self.path, 'COSMO_input', file_name)
             if not os.path.exists(file_path):
                 raise ValueError("COSMO input file {:s} missing".format(file_name))
@@ -429,12 +434,16 @@ class cc2_case(object):
             else:
                 self._n_nodes = self._ncos // self._n_tasks_per_node
         else:
+            if 'ccsm_pes' in self.nml['drv_in']:
+                pes_nml = self.nml['drv_in']['ccsm_pes']
+            else:
+                pes_nml = self.nml['drv_in']['cime_pes']
             if self.gpu_mode:   # Populate nodes with CESM tasks except one
                 self._n_nodes = self._ncos
                 self._ncesm = self._n_nodes * (self._n_tasks_per_node - 1)
             else:   # Determine number of CESM tasks and deduce number of nodes
                 if ncesm is None:
-                    self._ncesm = self.nml['drv_in']['ccsm_pes']['lnd_ntasks']
+                    self._ncesm = pes_nml['lnd_ntasks']
                 else:
                     self._ncesm = ncesm
                 ntot = self._ncos + self._ncesm
@@ -444,9 +453,9 @@ class cc2_case(object):
                 self._n_nodes = ntot // self._n_tasks_per_node
             # Apply number of CESM tasks to all relevant namelist parameters
             for comp in ['atm', 'cpl', 'glc', 'ice', 'lnd', 'ocn', 'rof', 'wav']:
-                self.nml['drv_in']['ccsm_pes']['{:s}_ntasks'.format(comp)] = self._ncesm
+                pes_nml['{:s}_ntasks'.format(comp)] = self._ncesm
             if self.gen_oasis:
-                self.nml['drv_in']['ccsm_pes']['atm_ntasks'] = 1
+                pes_nml['atm_ntasks'] = 1
 
 
     def _compute_run_dates(self):
@@ -519,14 +528,16 @@ class cc2_case(object):
         nstart = start_seconds // dt - 1
         hstop = hstart + runtime_hours
         nstop = (start_seconds + runtime_seconds) // dt
+        nhour_restart = int(hstop)
+        # ensure restart for the real end date, not after the dummy day
+        if self._run_end_date > self.end_date:
+            nhour_restart -= 24
 
 
         # adapt INPUT_ORG
         if 'hstop' in INPUT_ORG['runctl']:
             del INPUT_ORG['runctl']['hstop']
         INPUT_ORG['runctl']['nstop'] = nstop - 1
-        if 'hstop' in INPUT_ORG['runctl']:
-            del INPUT_ORG['runctl']['hstop']
 
         # adapt INPUT_IO
         for gribout in self._get_gribouts():
@@ -534,15 +545,14 @@ class cc2_case(object):
                 gribout['hcomb'][0:2] = hstart, hstop
             elif 'ncomb' in gribout:
                 gribout['ncomb'][0:2] = nstart, nstop
-        if self._run_end_date > self.end_date:
-            # ensure restart for the real end date, not after the dummy day
-            INPUT_IO['ioctl']['nhour_restart'] = [int(hstop)-24, int(hstop)-24, 24]
-        else:
-            INPUT_IO['ioctl']['nhour_restart'] = [int(hstop), int(hstop), 24]
+        INPUT_IO['ioctl']['nhour_restart'] = [nhour_restart, nhour_restart, 24]
 
         if not self.cosmo_only:
             # adapt drv_in
             drv_in['seq_timemgr_inparm']['stop_n'] = int(runtime_seconds)
+            drv_in['seq_timemgr_inparm']['stop_option'] = 'nseconds'
+            drv_in['seq_timemgr_inparm']['calendar'] = 'GREGORIAN'
+            drv_in['seq_timemgr_inparm']['restart_option'] = 'nseconds'
             if self._run_end_date > self.end_date:
                 # ensure restart for the real end date, not after the dummy day
                 drv_in['seq_timemgr_inparm']['restart_n'] = int(runtime_seconds)-86400
@@ -949,6 +959,7 @@ export MPICH_G2G_PIPELINE=256
         script_str += '# Case dependent variables\n'
         script_str += '# ------------------------\n'
         script_str += 'run_job={:s}\n'.format(self._run_job)
+        script_str += 'case_name={:s}\n'.format(self.name)
         script_str += 'xml_config={:s}\n'.format(self._xml_config)
         script_str += 'cos_in_origin={:s}\n'.format(self.cos_in)
         script_str += 'cos_in_target={:s}\n'.format(os.path.join(self.path,'COSMO_input'))
@@ -978,10 +989,13 @@ rsync -avrL --files-from ${transfer_list} ${cos_in_origin} ${cos_in_target}
 
 # Submit next run
 # ---------------
+# - ML - $1 and $2 positional arguments are start and end transfer dates formatted as YYYMMDD
+outfile=$case_name_$1-$2
 if [[ $(get_status "run") == "complete" ]]; then
     set_status "run" "submitted"
+    # - ML - use this in case the present job is running on the xfer queue
     unset SLURM_MEM_PER_CPU
-    sbatch --output $1 --error $1 ${run_job}
+    sbatch --output $outfile --error $outfile ${run_job}
 fi
 
 # Set transfer status
@@ -999,10 +1013,11 @@ set_status "transfer" "complete"'''
         d1_str = d1.strftime(date_fmt['cesm'])
         d2_str = d2.strftime(date_fmt['cesm'])
         logfile = 'pre_run_{:s}-{:s}.out'.format(d1_str, d2_str)
-        run_log = '{:s}_{:s}-{:s}.out'.format(self.name, d1_str, d2_str)
 
-        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {run_log:s}'
-        cmd = cmd_tmpl.format(log=logfile, job=self._pre_run_job, run_log=run_log)
+        # - ML - adding d1 and d2 as positionnal arguments in case a
+        #        user needs it in a modified pre_run job
+        cmd_tmpl = 'sbatch --output={log:s} --error={log:s} {job:s} {d1:s} {d2:s}'
+        cmd = cmd_tmpl.format(log=logfile, job=self._pre_run_job, d1=d1_str, d2=d2_str)
         print("submitting transfer with check_call('" + cmd + "', shell=True)")
         check_call(cmd, shell=True)
 
@@ -1031,11 +1046,12 @@ set_status "transfer" "complete"'''
         stream_list = ['"{:s}"'.format(os.path.normpath(gribout['ydir'])) for gribout in self._get_gribouts()]
         script_str += 'COSMO_gribouts=({:s})\n'.format(' '.join(stream_list))
         # CESM output streams
-        stream_list = ['"h0"']
-        for k in range(2,7):
-           if 'hist_fincl{:d}'.format(k) in self.nml['lnd_in']['clm_inparm']:
-               stream_list += ['"h{:d}"'.format(k-1)]
-        script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
+        if not self.cosmo_only:
+            stream_list = ['"h0"']
+            for k in range(2,7):
+               if 'hist_fincl{:d}'.format(k) in self.nml['lnd_in']['clm_inparm']:
+                   stream_list += ['"h{:d}"'.format(k-1)]
+            script_str += 'CESM_hh=({:s})\n'.format(' '.join(stream_list))
         # Archiving options
         script_str += 'remove_originals={:s}\n'.format('true' if self.archive_rm else 'false')
         script_str += 'compression={:s}\n'.format(self.archive_compression)
@@ -1087,7 +1103,7 @@ for ((YYYY=YS; YYYY<=YE; YYYY++)); do
             for gribout in ${COSMO_gribouts[@]}; do
                 echo "        handling COSMO stream ${gribout}"
                 gribname=$(basename ${gribout})
-                arch_name=lffd${YYYYMM}.${tar_ext}
+                arch_name=lffd_${gribname}_${YYYYMM}.${tar_ext}
                 files=$(find ${gribout} \( \( -name "lffd${YYYYMM}"'*' -and -not -name "lffd${YYYYMM}0100"'*' \)\\
                              -or -name "lffd${YYYYMMp1}0100"'*' \) -printf '%f\\n' | sort)
                 if (( ${#files} > 0 )); then
