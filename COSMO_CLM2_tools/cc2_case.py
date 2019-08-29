@@ -340,7 +340,7 @@ class cc2_case(object):
                 file_list.write(file_name + '\n')
 
         # Build file list to transfer or symlink
-        with open(self._transfer_list, mode ='w') as t_list:
+        with open(os.path.join(self.path, self._transfer_list), mode ='w') as t_list:
             if initial:
                 _check_add_file('laf', start_date, t_list)
             cur_date = start_date
@@ -353,7 +353,7 @@ class cc2_case(object):
     def transfer_input(self):
 
         if self.input_type == 'file':
-            check_call(['rsync', '-avL', '--files-from', self._transfer_list,
+            check_call(['rsync', '-avL', '--files-from', os.path.join(self.path, self._transfer_list),
                         self.cos_in, os.path.join(self.path,'COSMO_input')])
 
 
