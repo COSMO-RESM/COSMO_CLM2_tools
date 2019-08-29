@@ -332,15 +332,12 @@ class cc2_case(object):
         # function to check and add file to transfer list or directly symlink
         def _check_add_file(root, date, file_list):
             file_name = COSMO_input_file_name(root, date, ext)
-            if os.path.exists(os.path.join(self.cos_in, file_name)):
-                if self.input_type == 'symlink':
-                    print(file_name)
-                    check_call(['ln', '-sf', os.path.join(self.cos_in, file_name),
-                                os.path.join(self.path,'COSMO_input')])
-                elif self.input_type == 'file':
-                    file_list.write(file_name + '\n')
-            else:
-                raise ValueError("input file {:s} is missing from {:s}".format(file_name, self.cos_in))
+            if self.input_type == 'symlink':
+                print(file_name)
+                check_call(['ln', '-sf', os.path.join(self.cos_in, file_name),
+                            os.path.join(self.path,'COSMO_input')])
+            elif self.input_type == 'file':
+                file_list.write(file_name + '\n')
 
         # Build file list to transfer or symlink
         with open(self._transfer_list, mode ='w') as t_list:
@@ -372,18 +369,22 @@ class cc2_case(object):
         # Create COSMO_input directory if missing (essentially for symlinks)
         self._mk_miss_path('COSMO_input')
 
-        # Transfer first chunck input files or all
+        # Build transfer list of first chunck input files or all
         initial = self.start_mode == 'startup'
         if self.transfer_by_chunck and self._run_end_date < self.end_date:
             self.build_transfer_list(self._run_start_date, self._run_end_date, initial=initial)
         else:
             end_date = self.end_date + timedelta(days=1) if self.dummy_day else self.end_date
             self.build_transfer_list(self._run_start_date, end_date, initial=initial)
-        self.transfer_input()
-        os.remove(self._transfer_list)
 
-        # Set transfer status
-        self.transfer_status = 'complete'
+        # Only do transfer in the transfer_all case
+        if self.transfer_all:
+            self.transfer_input()
+            os.remove(self._transfer_list)
+            # Set transfer status
+            self.transfer_status = 'complete'
+        else:
+            self.run_status = 'complete'
 
 
     def _check_COSMO_input(self, start_date, end_date):
@@ -727,6 +728,16 @@ class cc2_case(object):
         os.chdir(self.path)
 
         self._submit_run_cmd(self._run_end_date, self.get_next_run_end_date())
+
+        os.chdir(cwd)
+
+
+    def submit_transfer(self):
+
+        cwd = os.getcwd()
+        os.chdir(self.path)
+
+        self._submit_transfer_cmd(self._run_start_date, self._run_end_date)
 
         os.chdir(cwd)
 

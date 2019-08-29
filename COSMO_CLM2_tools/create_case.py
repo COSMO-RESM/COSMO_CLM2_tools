@@ -168,9 +168,12 @@ def create_case():
     daint_group.add_argument('--shebang', action=cc2_act('daint'),
                              help="submit script shebang (default: #!/bin/bash)")
 
-    cmd_line_group = parser.add_argument_group('cmd line', 'Options only avialble to the command line (no xml)')
+    cmd_line_group = parser.add_argument_group('cmd line', 'Options avialble to the command line only (no xml)')
     cmd_line_group.add_argument('--no_submit', action='store_false', dest='submit',
                                 help="do not submit job after setup")
+    cmd_line_group.add_argument('--submit_run_first', action='store_true',
+                                help="directly transfer input files and then submit run instead of\n"
+                                "submitting the transfer job first which then submits the run job")
 
     opts = parser.parse_args()
 
@@ -189,8 +192,17 @@ def create_case():
     # Submit case
     # ===========
     if opts.submit:
-        cc2case.run_status = 'submitted'
-        cc2case.submit_run()
+        if opts.submit_run_first:
+            # Don't submit a job for transferring files, do it interactively (i.e. now)
+            cc2case.transfer_input()
+            cc2case.transfer_status = 'complete'
+            # Then submit the run
+            cc2case.run_status = 'submitted'
+            cc2case.submit_run()
+        else:
+            # First submit a transfer job which will in turn submit the run job
+            cc2case.transfer_status = 'submitted'
+            cc2case.submit_transfer()
 
 def get_case_args(cmd_opts, cc2_cmd_args):
 
