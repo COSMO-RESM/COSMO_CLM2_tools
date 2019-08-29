@@ -201,6 +201,7 @@ def create_case():
             cc2case.submit_run()
         else:
             # First submit a transfer job which will in turn submit the run job
+            cc2case.run_status = 'complete'
             cc2case.transfer_status = 'submitted'
             cc2case.submit_transfer()
 
