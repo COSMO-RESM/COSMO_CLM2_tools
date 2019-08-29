@@ -377,15 +377,6 @@ class cc2_case(object):
             end_date = self.end_date + timedelta(days=1) if self.dummy_day else self.end_date
             self.build_transfer_list(self._run_start_date, end_date, initial=initial)
 
-        # Only do transfer in the transfer_all case
-        if self.transfer_all:
-            self.transfer_input()
-            os.remove(self._transfer_list)
-            # Set transfer status
-            self.transfer_status = 'complete'
-        else:
-            self.run_status = 'complete'
-
 
     def _check_COSMO_input(self, start_date, end_date):
 
