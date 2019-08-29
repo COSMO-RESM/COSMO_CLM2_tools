@@ -992,7 +992,7 @@ rsync -avrL --files-from ${transfer_list} ${cos_in_origin} ${cos_in_target}
 # Submit next run
 # ---------------
 # - ML - $1 and $2 positional arguments are start and end transfer dates formatted as YYYMMDD
-outfile=$case_name_$1-$2
+outfile=${case_name}_$1-$2
 if [[ $(get_status "run") == "complete" ]]; then
     set_status "run" "submitted"
     # - ML - use this in case the present job is running on the xfer queue
