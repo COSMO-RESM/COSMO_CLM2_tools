@@ -2316,7 +2316,7 @@
                " WARNING: tool has to be run from the default Prg-Env-cray environment"
          parser = ArgumentParser(description=dsc, formatter_class=RawTextHelpFormatter)
          parser.add_argument('cesm_trunk', help="path to the CESM directory")
-         parser.add_argument('--clm_version', choices=['4.0, 4.5'], default='4.0', help="CLM version")
+         parser.add_argument('--clm_version', choices=['4.0', '4.5'], default='4.0', help="CLM version")
          parser.add_argument('-c', '--compiler', help="compiler to use (default: pgi)", default='pgi')
          parser.add_argument('-v', '--compiler_version', help="switch to this version of the compiler\n"\
                              "This is not recommended by CSCS")
