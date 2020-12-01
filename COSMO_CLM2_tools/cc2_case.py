@@ -1033,6 +1033,7 @@ set_status "transfer" "complete"'''
         script_str += '#SBATCH --partition=xfer\n'
         script_str += '#SBATCH --ntasks=1\n'
         script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
+        script_str += '#SBATCH --account={:s}\n'.format(self.account)
         script_str += '#SBATCH --job-name=cc2_archive\n\n'
 
         # Case dependent variables
@@ -1148,6 +1149,7 @@ done'''
         script_str += '#SBATCH --partition=xfer\n'
         script_str += '#SBATCH --ntasks=1\n'
         script_str += '#SBATCH --time={:s}\n'.format(self.archive_time)
+        script_str += '#SBATCH --account={:s}\n'.format(self.account)
         script_str += '#SBATCH --job-name=cc2_archive_rst\n\n'
 
         # Case dependent variables
